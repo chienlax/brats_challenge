@@ -1,252 +1,477 @@
 # BraTS Post-treatment Toolkit – Team Guide
 
-This document explains the project structure, configuration steps, and how to run
-our analysis/visualization utilities so that every teammate can get productive quickly.
+Your one-stop reference for installing the toolkit, staging data, and running every
+analysis/visualization workflow that ships with this repository.
 
 ---
 
-## 1. Repository layout
+## Table of contents
+
+- [1. Quick-start checklist](#1-quick-start-checklist)
+- [2. Repository layout](#2-repository-layout)
+- [3. Prerequisites & environment setup](#3-prerequisites--environment-setup)
+- [4. Data acquisition & directory hygiene](#4-data-acquisition--directory-hygiene)
+- [5. Core workflow overview](#5-core-workflow-overview)
+- [6. Command-line toolkit reference](#6-command-line-toolkit-reference)
+  - [6.1 Dataset summary (`summarize_brats_dataset.py`)](#61-dataset-summary-summarize_brats_datasetpy)
+  - [6.2 Visualization panels (`visualize_brats.py`)](#62-visualization-panels-visualize_bratspy)
+  - [6.3 Per-case histograms (`generate_case_statistics.py`)](#63-per-case-histograms-generate_case_statisticspy)
+  - [6.4 GIF generator (`generate_case_gifs.py`)](#64-gif-generator-generate_case_gifspy)
+  - [6.5 Volume pre-renderer (`precompute_volume_visuals.py`)](#65-volume-pre-renderer-precompute_volume_visualspy)
+- [7. Interactive notebook (`notebooks/brats_exploration.ipynb`)](#7-interactive-notebook-notebooksbrats_explorationipynb)
+- [8. Outputs & artifact management](#8-outputs--artifact-management)
+- [9. Automation & batching tips](#9-automation--batching-tips)
+- [10. Troubleshooting & FAQ](#10-troubleshooting--faq)
+- [11. Collaboration workflow](#11-collaboration-workflow)
+- [12. Roadmap & contribution guardrails](#12-roadmap--contribution-guardrails)
+- [13. Related resources & contacts](#13-related-resources--contacts)
+
+---
+
+## 1. Quick-start checklist
+
+1. **Clone the repo** (code only; data are synced separately).
+2. **Create & activate** a virtual environment (see Section 3).
+3. **Install dependencies** from `requirements.txt` (matplotlib, nibabel, numpy, pandas, imageio, ipywidgets).
+4. **Mirror the imaging data** into `training_data/`, `training_data_additional/`, and `validation_data/`.
+5. **Smoke test the setup** by running the dataset summary script and reviewing `outputs/dataset_stats.json`.
+6. **Generate visuals** (panels/GIFs/histograms) or explore interactively via the notebook.
+7. **Commit only code & docs**—outputs and raw data stay local per policy.
+
+Need a deeper dive? Read on for step-by-step instructions, advanced flags, and maintenance tips.
+
+---
+
+## 2. Repository layout
 
 ```
 brats_challenge/
-├── README.md               # Quick-start overview
-├── requirements.txt        # Python dependencies (pinned)
-├── scripts/
-│   ├── summarize_brats_dataset.py
-│   └── visualize_brats.py
+├── README.md                       # Executive summary + quick commands
+├── requirements.txt                # Python dependencies (pinned versions)
 ├── docs/
-│   └── usage_guide.md      # ← you are here
-├── outputs/                # Generated figures/reports (ignored by git)
-├── training_data*/         # Large MRI datasets (ignored by git)
-└── .venv/                  # Project virtual environment (ignored by git)
+│   ├── usage_guide.md             # ← you are here
+│   ├── data_overview.md           # Aggregated dataset statistics & context
+│   └── medical_report.md          # Clinical notes (if provided)
+├── notebooks/
+│   └── brats_exploration.ipynb    # Interactive exploration playground
+├── scripts/                       # Command-line utilities
+│   ├── summarize_brats_dataset.py
+│   ├── visualize_brats.py
+│   ├── generate_case_statistics.py
+│   └── generate_case_gifs.py
+├── outputs/                       # Generated figures/reports (git-ignored)
+├── training_data/                 # Optional baseline dataset (git-ignored)
+├── training_data_additional/      # BraTS post-treatment releases (git-ignored)
+├── validation_data/               # Held-out cases (git-ignored)
+└── .venv/                         # Local virtual environment (git-ignored)
 ```
 
-> **Note:** All imaging data live under `training_data/`, `training_data_additional/`,
-> and `validation_data/`. These directories are excluded from version control via
-> `.gitignore`; you must source them from the shared storage location before running the scripts.
+> **Data reminder:** Imaging directories are intentionally absent from version control.
+> Copy them from the secure storage share before running any scripts. If space is
+> tight, symlink directories instead of copying.
 
 ---
 
-## 2. Environment and configuration
+## 3. Prerequisites & environment setup
 
-1. **Create/activate the virtual environment (Windows PowerShell):**
+- **Python:** 3.10+ (tested with CPython 3.11). Use the same interpreter across scripts and the notebook.
+- **OS:** Windows, macOS, and modern Linux distros are supported; examples in this guide use Windows PowerShell.
+- **Disk:** ~50 GB for datasets plus room for generated artifacts.
+- **Optional:** GPU is *not* required. All utilities run comfortably on CPU-only laptops.
+
+### 3.1 Create a virtual environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python --version   # confirm interpreter
+```
+
+Linux/macOS equivalent:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python --version
+```
+
+> Tip: Use `Set-ExecutionPolicy -Scope Process Bypass` if PowerShell blocks the activation script.
+
+### 3.2 Install requirements
+
+```powershell
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Verify the install:
+
+```powershell
+pip list | Select-String nibabel
+```
+
+### 3.3 IDE & notebook add-ons
+
+- Install the **Jupyter** and **Python** extensions in VS Code for best notebook support.
+- `ipywidgets` is bundled already; if widget rendering fails, reinstall via `pip install ipywidgets --force-reinstall`.
+- For remote/headless servers, set `MPLBACKEND=Agg` or use `--no-overlay`/`--output` flags to avoid GUI requirements.
+
+---
+
+## 4. Data acquisition & directory hygiene
+
+1. **Retrieve the BraTS archives** from the consortium’s secure storage (ask the project lead for the path and credentials).
+2. **Extract** the archives so each case sits in its own folder: `BraTS-GLI-XXXXX-YYY/`.
+3. **Place or symlink** those folders under `training_data_additional/` (primary cohort). Legacy data may live in `training_data/`; validation drops belong in `validation_data/`.
+4. **Verify counts**:
    ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
+   (Get-ChildItem training_data_additional -Directory).Count
    ```
+   Expect 271 directories for the March 2025 release (see `docs/data_overview.md`).
+5. **Spot-check modality files** inside a case (e.g., `BraTS-GLI-02405-100`) to confirm the pattern `CASEID-{t1c,t1n,t2f,t2w,seg}.nii.gz`.
+6. **Keep data read-only** when possible to prevent accidental modifications. Scripts never write inside the dataset trees.
 
-2. **Install dependencies:**
-   ```powershell
-   pip install -r requirements.txt
-   ```
-
-3. **(Optional) GPU/accelerated plotting:** The current toolkit is CPU-only. If we
-   integrate PyTorch/monai later, expand `requirements.txt` accordingly.
-
-4. **Environment variables:** None required today. Future enhancements (e.g., storing
-   dataset paths or output buckets) should be wired through a `.env` file and surfaced
-   in this guide.
+> Quality gate: after every new data delivery, run the dataset summary (Section 6.1) and compare the resulting JSON against the previous baseline. Any shape/spacing/label shifts should be investigated immediately.
 
 ---
 
-## 3. Dataset expectations
+## 5. Core workflow overview
 
-- Each case folder follows the BraTS convention: `CASE-ID/CASE-ID-{modality}.nii.gz`.
-- Modalities available: `t1c`, `t1n`, `t2f`, `t2w` plus `seg` for labels.
-- All volumes should be `182 × 218 × 182` voxels with 1 mm spacing.
-- Scripts assume NIfTI files with valid affine matrices; malformed data will raise
-  informative exceptions (file not found, dtype mismatch, etc.).
+| Step | Goal | Command | Output |
+|------|------|---------|--------|
+| 1 | Baseline QA | `summarize_brats_dataset.py` | `outputs/dataset_stats.json` summary of cohort geometry/intensity/labels |
+| 2 | Case deep-dive | `generate_case_statistics.py` | Histogram PNGs + label table per case |
+| 3 | Publication figures | `visualize_brats.py` | High-res modality panels or orthogonal views |
+| 4 | Animation reels | `generate_case_gifs.py` | GIFs sweeping through slices |
+| 5 | Interactive exploration | `brats_exploration.ipynb` | Widgets for slicing, analytics, and quick prototyping |
 
-### Segmentation label encoding
-
-| Label | Region | Notes |
-|-------|--------|-------|
-| `0` | Background | Healthy tissue / outside brain |
-| `1` | Enhancing tumor (ET) | Post-contrast enhancing regions |
-| `2` | Non-enhancing tumor (NET) | Includes necrosis and non-enhancing core |
-| `3` | Peritumoral edema (ED) | Hyperintense edema on FLAIR/T2 |
-| `4` | Resection cavity (RC) | Post-surgical cavity |
-
-`scripts/visualize_brats.py` overlays these labels automatically with distinct colors.
-
-### Data quality checks
-
-Run the dataset summary script (Section 4) to confirm geometry consistency,
-modalities present, and segmentation label ranges after receiving new data drops.
+Follow the steps sequentially for onboarding or run them à la carte depending on your task.
 
 ---
 
-## 4. Dataset summary script (`summarize_brats_dataset.py`)
+## 6. Command-line toolkit reference
 
-### Purpose
-- Scan the dataset once and capture aggregate stats (shapes, voxel spacing, intensity
-  percentiles, label distributions, modality presence, dtype breakdown).
-- Export a JSON report for downstream dashboards or QA review.
+All scripts reside in `scripts/` and share common characteristics:
 
-### Basic usage
+- Implemented in pure Python with pinned dependencies from `requirements.txt`.
+- Emit concise progress logs (`Processing CASE (i/N)` or `Saved figure to ...`).
+- Accept absolute or relative paths; outputs are created on demand.
+- Fail fast with informative error messages if files are missing or malformed.
+
+### 6.1 Dataset summary (`summarize_brats_dataset.py`)
+
+**Purpose:**
+
+- Aggregate geometry, spacing, orientation, modality availability, intensity percentiles, segmentation label counts, and dtype frequencies across the cohort.
+- Optionally embed per-case detail snapshots for auditing.
+
+**Basic command:**
+
 ```powershell
 python scripts/summarize_brats_dataset.py --root training_data_additional --output outputs/dataset_stats.json
 ```
 
-### Important flags
+**Key flags:**
+
 | Flag | Description |
 |------|-------------|
-| `--root` (required) | Path to the dataset folder. |
-| `--max-cases N` | Process only the first `N` cases (quick smoke test). |
-| `--sample-cases N` | Embed detailed per-case summaries for the first `N` subjects in the report. |
-| `--output PATH` | Persist results to `PATH`; prints to STDOUT if omitted. |
+| `--root PATH` *(required)* | Dataset folder containing case directories. Works with `training_data`, `training_data_additional`, or a bespoke path. |
+| `--max-cases N` | Limit processing to the first `N` case directories—useful for smoke tests. |
+| `--sample-cases N` | Include detailed per-case blobs for the first `N` subjects in the JSON output. |
+| `--output PATH` | Persist JSON to disk. If omitted, the JSON prints to STDOUT. |
 
-### Output interpretation
-- `aggregate.num_cases` – total subjects processed.
-- `shape_counts` / `voxel_spacing_counts` – detect geometry anomalies.
-- `modality_presence` – confirm no modalities are missing.
-- `intensity_summary` – mean/min/max of the percentile distributions per modality.
-- `label_counts` – global voxel counts per segmentation class.
-- `dtype_counts` – track float32 vs float64 volumes (helpful for normalization policies).
+**Interpreting the JSON:**
 
-The script logs progress (`Processed CASE (i/N)`) to track long runs. Expect the full
-271-case scan to take a few minutes on standard hardware.
+- `aggregate.num_cases` — total processed cases.
+- `aggregate.shape_counts`, `aggregate.voxel_spacing_counts` — catch geometry anomalies.
+- `aggregate.modality_presence` — confirm all four modalities are present per case.
+- `aggregate.intensity_summary[MODALITY]` — average/min/max of p01/p50/p99/mean intensities.
+- `aggregate.label_counts` — total voxel counts per segmentation class.
+- `aggregate.dtype_counts` — dtype frequency (watch for unexpected float64 volumes).
+- `aggregate.orientation_counts` — orientational consistency (expect `(L, A, S)`).
 
----
+**Performance tips:**
 
-## 5. Visualization script (`visualize_brats.py`)
+- Full 271-case runs finish in a few minutes on a laptop (≈3–4 GB RAM peak). Use `--max-cases 5` when iterating on code.
+- Redirect logs to file (`... | Tee-Object -FilePath logs/summary.log`) for archival.
 
-### Purpose
-- Generate publication-ready panels comparing modalities on a chosen slice.
-- Produce orthogonal views for a single modality.
-- Optionally overlay segmentation masks with a consistent color legend.
+**Next actions:** Feed the JSON into dashboards or compare new drops with `data_overview.md` metrics.
 
-### Modalities layout example
+### 6.2 Visualization panels (`visualize_brats.py`)
+
+**Purpose:**
+
+- Produce publication-ready figures comparing modalities on a chosen plane or orthogonal views for a single modality.
+- Overlay segmentation masks with the challenge color legend.
+
+**Modalities layout example:**
+
 ```powershell
 python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-02405-100 `
     --layout modalities --axis axial --fraction 0.55 `
     --output outputs/BraTS-GLI-02405-100_modalities.png
 ```
 
-### Orthogonal layout example
+**Orthogonal layout example:**
+
 ```powershell
 python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-02405-100 `
     --layout orthogonal --modality t1c --indices 90 110 70 `
     --output outputs/BraTS-GLI-02405-100_orthogonal.png
 ```
 
-### Key options
+**Flags to know:**
+
 | Flag | Description |
 |------|-------------|
-| `--layout {modalities, orthogonal}` | Select panel style. |
-| `--axis {axial, coronal, sagittal}` | Slice plane for modalities layout. |
-| `--fraction f` | Relative slice position (0–1). |
-| `--index n` | Absolute slice index (overrides `--fraction`). |
-| `--indices a b c` | Slice indices for `orthogonal` layout (sagittal, coronal, axial). |
-| `--modality m` | Modality to visualize in orthogonal layout. |
-| `--no-overlay` | Disable segmentation overlay. |
-| `--show` | Display interactively (for local exploration). |
-| `--output PATH` | Save figure (directories auto-created). |
+| `--layout {modalities, orthogonal}` | Choose between modality comparison or three-plane layout. |
+| `--axis {axial, coronal, sagittal}` | Slice direction for the modalities layout. |
+| `--fraction f` | Relative slice position (0–1). Rounded to the nearest slice when `--index` is absent. |
+| `--index n` | Absolute slice index overriding `--fraction` for reproducibility. |
+| `--indices a b c` | Explicit sagittal, coronal, axial indices for orthogonal layout. |
+| `--modality m` | Modality displayed in orthogonal layout (default `t1c`). |
+| `--dpi N` | Control output resolution (default 160). Increase for print figures. |
+| `--no-overlay` | Disable segmentation overlay (grayscale only). |
+| `--show` | Pop up a GUI window (omit on servers). |
+| `--output PATH` | Save figure. Directories auto-create as needed. |
 
-### Implementation details
-- Intensities are normalized per volume using the 1st–99th percentile range, reducing
-  outlier impact without clipping clinically relevant signal.
-- Segmentation overlays use a transparent colormap aligned with BraTS post-treatment
-  labels (Enhancing, Non-Enhancing, Edema, Resection cavity).
-- Axial slices are rotated to follow radiological convention (patient left on image right).
+**Under the hood:**
 
----
+- Intensities are normalized per volume using 1st–99th percentiles to dampen outliers.
+- Axial slices follow radiological convention (patient left appears on image right).
+- Legends list segmentation labels 1–4 with BraTS-compliant colors.
 
-## 6. Per-case statistics script (`generate_case_statistics.py`)
+**Batch production:**
 
-### Purpose
-- Generate normalized intensity histograms for every modality in a case.
-- Record voxel counts and percentage breakdowns for each segmentation label.
+- PowerShell: `Get-ChildItem training_data_additional -Directory | ForEach-Object { python scripts/visualize_brats.py --case-dir $_.FullName --layout modalities --fraction 0.5 --output (Join-Path outputs "${($_.Name)}_modalities.png") }`
+- Linux: `for d in training_data_additional/*; do python scripts/visualize_brats.py --case-dir "$d" --layout modalities --fraction 0.5 --output outputs/$(basename "$d")_modalities.png; done`
 
-### Example command
+### 6.3 Per-case histograms (`generate_case_statistics.py`)
+
+**Purpose:**
+
+- Quantify modality intensity distributions and segmentation label volumes per case.
+- Produce histogram PNGs for visual QA and a JSON report for downstream analytics.
+
+**Example command:**
+
 ```powershell
 python scripts/generate_case_statistics.py --root training_data_additional --output-dir outputs/stats --max-cases 10
 ```
 
-Outputs include:
-- `outputs/stats/CASE/CASE_hist.png` – multi-panel histogram figure.
-- `outputs/stats/case_statistics.json` – consolidated table of label volumes.
+**Outputs:**
 
-Tune `--bins`, `--lower-percentile`, and `--upper-percentile` to control normalization when
-dealing with outliers.
+- `outputs/stats/<CASE>/<CASE>_hist.png` — side-by-side histograms (normalized 0–1 range).
+- `outputs/stats/case_statistics.json` — list of objects with voxel counts and label percentages (`voxels_label_N`, `pct_label_N`).
 
-## 7. GIF generator (`generate_case_gifs.py`)
+**Useful flags:**
 
-### Purpose
-- Assemble slice-by-slice animations for quick QC or sharing with clinicians.
-- Optional segmentation overlays with configurable stride and playback speed.
+| Flag | Description |
+|------|-------------|
+| `--case CASE_ID` | Process a single case (skips directory scan). |
+| `--bins N` | Histogram bin count (default 100). |
+| `--lower-percentile P`, `--upper-percentile Q` | Adjust normalization percentiles; tighten ranges for noisy scans. |
+| `--max-cases N` | Limit number of cases when scanning the root. |
 
-### Example command
+**Workflow tips:**
+
+- Inspect histogram PNGs to detect clipping or bimodal distributions before normalization decisions.
+- Use the JSON as input for pandas or BI dashboards: `pandas.read_json("outputs/stats/case_statistics.json")`.
+- Missing segmentations raise an error—ideal for catching incomplete case folders.
+
+### 6.4 GIF generator (`generate_case_gifs.py`)
+
+**Purpose:**
+
+- Create slice-by-slice animations for QC reviews or clinician storytelling.
+- Supports optional segmentation overlays and stride control for length/size trade-offs.
+
+**Example command:**
+
 ```powershell
 python scripts/generate_case_gifs.py --root training_data_additional --output-dir outputs/gifs --modality t2f --axis axial --step 4 --overlay --max-cases 3
 ```
 
-GIFs are written to `outputs/gifs/CASE_modality_axis.gif`. Use `--case CASE-ID` to target
-a single subject, `--step` to skip slices, and `--fps` to control playback speed.
+**Flags:**
 
-## 8. Interactive notebook (`notebooks/brats_exploration.ipynb`)
+| Flag | Description |
+|------|-------------|
+| `--case CASE_ID` | Target a single subject. |
+| `--modality {t1c,t1n,t2f,t2w}` | Modality to animate (default `t2f`). |
+| `--axis {sagittal, coronal, axial}` | Orientation for traversal. |
+| `--step N` | Slice stride (higher = shorter GIF). Minimum enforced at 1. |
+| `--fps N` | Frames per second (default 12). Lower to slow down playback. |
+| `--overlay` | Add segmentation colors (needs `*-seg.nii.gz`). |
+| `--dpi N` | Resolution of intermediate frames. |
+
+**Outputs:**
+
+- `outputs/gifs/<CASE>_<MODALITY>_<AXIS>.gif`
+- Console logs summarizing progress (`Rendering GIF for CASE (i/N)` and file path).
+
+**Practical advice:**
+
+- Large GIFs (all slices, low stride) can reach 50–100 MB; adjust `--step` or convert to MP4 externally if needed.
+- For remote runs, set `matplotlib` to Agg (done automatically in the script).
+
+### 6.5 Volume pre-renderer (`precompute_volume_visuals.py`)
+
+**Purpose:**
+
+- Batch-render standalone, interactive 3D viewers (HTML) for each case/modality, so you can open volumes instantly without reprocessing.
+- Optionally overlay segmentation labels as translucent isosurfaces when `*-seg.nii.gz` files are present.
+
+**Quick start:**
+
+```powershell
+python scripts/precompute_volume_visuals.py --root training_data_additional `
+  --output-dir outputs/volumes --modality t1c --with-segmentation --downsample 2
+```
+
+Open a single case immediately after rendering:
+
+```powershell
+python scripts/precompute_volume_visuals.py --case BraTS-GLI-02405-100 `
+  --output-dir outputs/volumes --open
+```
+
+**Key flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--root PATH` | Dataset directory containing case folders (default `training_data_additional`). |
+| `--case CASE_ID` | Target a single case; repeat flag to enumerate multiple cases. |
+| `--cases-file FILE` | Text file with one case ID per line. Useful for curated subsets. |
+| `--modality {t1c,t1n,t2f,t2w}` | Modality to render (default `t1c`). |
+| `--with-segmentation` | Adds segmentation isosurfaces (labels 1–4) when available. |
+| `--downsample N` | Subsample stride for voxels (default 2). Lower for fidelity, higher for lighter HTML. |
+| `--output-dir PATH` | Destination for HTML viewers (default `outputs/volumes`). |
+| `--skip-existing` / `--overwrite` | Control idempotency vs. regeneration of existing HTML files. |
+| `--open` | Launch each freshly generated HTML file in your default browser (best for single-case runs). |
+| `--strict` | Abort on the first failure instead of continuing. |
+
+**Outputs:**
+
+- One HTML file per processed case (e.g., `outputs/volumes/BraTS-GLI-02405-100_t1c_volume.html`).
+- Each viewer includes a grayscale volume trace plus optional colored label isosurfaces. Use the Plotly controls to orbit, zoom, and adjust opacity.
+
+**Performance notes:**
+
+- Downsampling by 2 preserves fine structure while keeping HTML files ~30–60 MB. Increase the stride for preview runs on low-power machines.
+- Rendering with segmentation isosurfaces requires more memory; if the browser struggles, raise the downsampling factor or omit `--with-segmentation` for the first pass.
+- The script injects Plotly from CDN (`include_plotlyjs="cdn"`); the HTML viewers work offline after first load thanks to cached assets.
+
+---
+
+## 7. Interactive notebook (`notebooks/brats_exploration.ipynb`)
 
 ### Highlights
-- Geometry audit: tabular shape/spacing/orientation summaries.
-- Label analytics: dataset-wide label ratios and per-case tables.
-- Slice viewers: modality/axis selectors with interactive mask overlays.
-- Histogram explorer: per-case intensity and label-volume plots.
-- GIF pipeline helper: ready-to-run functions mirroring the batch script.
 
-Launch with:
+- **Geometry audit:** Table of shapes, voxel spacing, and orientation; flags inconsistencies.
+- **Label analytics:** Aggregated label ratios plus per-case breakdowns mirroring the summary script.
+- **Slice viewers:** ipywidgets controls for modality, axis, slice position, and overlay toggles.
+- **Histogram explorer:** On-demand plots per case with percentile sliders.
+- **GIF helper cells:** Functions that wrap the GIF script for ad-hoc experimentation.
+
+### Launching locally
 
 ```powershell
 jupyter notebook notebooks/brats_exploration.ipynb
 ```
 
-Ensure `ipywidgets` is installed (included in `requirements.txt`). When running remotely, set
-`matplotlib` to a non-interactive backend if needed.
+- Ensure the virtual environment is active before launching.
+- For VS Code users, open the notebook directly and select the `.venv` interpreter.
+- When running on a server without GUI forwarding, run `jupyter notebook --no-browser --port 8888` and port-forward via SSH.
 
-## 9. Outputs and logging
+### Notebook etiquette
 
-- All generated figures/JSON land in `outputs/` (ignored by git). Organize subfolders
-  (e.g., `outputs/figures`, `outputs/reports`) as needed.
-- Scripts print concise progress text; redirect to log files if running in batch mode.
-
-
-## 10. Troubleshooting
-
-| Issue | Resolution |
-|-------|------------|
-| `FileNotFoundError` for modalities | Confirm dataset path and that the case folder contains expected NIfTI filenames. |
-| All-zero figures | Check for invalid normalization (rare if volume contains mostly zeros). Try `--index` to target slices with visible anatomy. |
-| Matplotlib backend errors | When running headless (e.g., remote server), omit `--show` and rely on `--output`. |
-| Memory limits | Scripts load one volume at a time; if memory issues occur, ensure 64-bit Python and sufficient RAM. |
-
-
-## 11. Collaboration workflow
-
-1. Pull the repository (without data) from GitHub.
-2. Obtain imaging data from the secure server and place them in the ignored folders.
-3. Install requirements and run the summary script to validate the drop.
-4. Generate visualization figures for QC or presentations.
-5. Commit only code/docs; outputs and raw data stay local.
-
-
-## 12. Upcoming enhancements (roadmap)
-
-- **Interactive notebooks:** Build Jupyter notebooks showcasing end-to-end exploratory
-  analysis (dynamic slice sliders, segmentation overlays, interactive histograms).
-- **Heavier statistics:** Automate per-case histograms, intensity distribution plots, and
-  label-percent summaries with batch export.
-- **GIF/Video generation:** Batch scripts to produce slice-by-slice animations across
-  modalities for review meetings.
-- **QC dashboards:** Integrate summary JSON into lightweight dashboards (e.g., streamlit).
-
-These items are tracked separately—coordinate with the team lead before starting a new
-thread, and capture decisions in this `docs/` folder.
+- Keep outputs trimmed before committing (Clear All Outputs in VS Code).
+- Parameterize paths at the top of the notebook so others can switch datasets easily.
+- Use the notebook to prototype changes, then upstream stable logic into the scripts.
 
 ---
 
-## 10. Contact & support
+## 8. Outputs & artifact management
 
-- **Primary maintainer:** *TBD — assign on project kickoff.*
-- **Shared questions:** Use the team’s Slack channel `#brats-post-tx`. Update this guide
-  whenever new utilities or configuration steps are introduced.
+| Location | Contents | Notes |
+|----------|----------|-------|
+| `outputs/dataset_stats.json` | Latest dataset-wide summary. | Regenerate after every new data drop; archive dated copies if needed. |
+| `outputs/stats/` | Histogram PNGs + per-case JSON. | Consider pruning old runs to save space. |
+| `outputs/gifs/` | Animated GIFs per case/modality/axis. | Heavy files—store only the versions you actively share. |
+| `outputs/volumes/` | Interactive Plotly HTML viewers per case/modality. | Generated by `precompute_volume_visuals.py`; open directly in a browser. |
+| `outputs/*.png` | Visualization panels. | Name files using `<CASE>_<layout>.png` for traceability. |
 
-Let’s keep this document current so onboarding the next teammate is frictionless! 💪
+- The `outputs/` folder is ignored by git; feel free to create subdirectories such as `outputs/reports/` or `outputs/presentations/`.
+- When sharing artifacts externally, redact PHI and note whether overlays include segmentation labels.
+
+---
+
+## 9. Automation & batching tips
+
+- **Parallelization:** Scripts are single-threaded by design. For large batches, run multiple PowerShell windows or use GNU Parallel (Linux) with care to avoid saturating disk IO.
+- **Logging:** Append `| Tee-Object -FilePath logs/<name>.log` in PowerShell or `2>&1 | tee logs/<name>.log` in Bash to capture console output.
+- **Case lists:** Process a subset with a text file: `Get-Content cases.txt | ForEach-Object { python scripts/visualize_brats.py --case-dir (Join-Path training_data_additional $_) ... }`.
+- **Scheduled runs:** On Windows Task Scheduler or cron, activate the virtual environment within the job (`powershell.exe -ExecutionPolicy Bypass -Command ".\.venv\Scripts\Activate.ps1; ..."`).
+
+---
+
+## 10. Troubleshooting & FAQ
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `FileNotFoundError: Missing expected file` | Case folder lacks a modality (naming typo, incomplete sync). | Re-sync the case; confirm filenames follow `CASEID-modality.nii.gz`. |
+| JSON missing expected keys | Script terminated early (exception, path wrong). | Re-run with `--max-cases` small to reproduce; inspect console output for the failing case. |
+| All-zero or washed-out figures | 1st–99th percentile normalization collapsed (almost constant volume). | Use `--index` to pick a slice with anatomy, or adjust percentiles in `generate_case_statistics.py`. |
+| `matplotlib` backend errors on server | GUI backend selected by default. | Avoid `--show`; ensure `MPLBACKEND=Agg` (Linux) or rely on saved outputs. |
+| `MemoryError` during histograms | Extremely large simultaneous plots. | Reduce `--max-cases`, close other apps, or process cases sequentially. |
+| GIF generation is slow | Rendering hundreds of frames at high DPI. | Increase `--step`, lower `--dpi`, or skip overlays. |
+| Widget controls missing in notebook | `ipywidgets` not enabled. | Run `pip install ipywidgets --force-reinstall` and `jupyter nbextension enable --py widgetsnbextension`. |
+| Orientation legend unexpected | Affine not canonical (rare). | Check `aggregate.orientation_counts` and confirm the case’s affine in nibabel; update `aff2axcodes` logic if needed. |
+
+Need more help? See Section 13 for contact details.
+
+---
+
+## 11. Collaboration workflow
+
+1. **Sync code** from GitHub (`git pull origin main`).
+2. **Sync data** from the secure share (rsync/robocopy depending on platform).
+3. **Run `summarize_brats_dataset.py`** to validate geometry/labels for the latest drop.
+4. **Produce visuals** needed for the sprint (panels, GIFs, histograms).
+5. **Document findings** in `docs/` (update `data_overview.md` or add a short report).
+6. **Commit/push** code or documentation changes only; data/outputs remain local.
+7. **Open a PR** summarizing the change, referencing any generated artifacts or QA steps performed.
+
+> Keep this guide in sync with any new utilities or workflow tweaks. If you add a script, document it in Section 6.
+
+---
+
+## 12. Roadmap & contribution guardrails
+
+- **Interactive dashboards:** Feed `dataset_stats.json` and `case_statistics.json` into Streamlit/Panel dashboards for live QC.
+- **Extended analytics:** Explore percentile-based z-score normalization, longitudinal case tracking, and volume trend charts.
+- **Media exports:** Add MP4/WEBM support to the GIF script and expose colorbar customization.
+- **Automation:** Package scripts into a CLI bundle (e.g., Typer) or Snakemake pipeline for reproducible batch runs.
+
+Contribution tips:
+
+- Pair code changes with documentation updates (this guide, README, or `data_overview.md`).
+- Maintain pinned dependency versions; test upgrades in a feature branch.
+- Capture major decisions in `docs/` to onboard the next teammate faster.
+
+---
+
+## 13. Related resources & contacts
+
+- **Docs:**
+  - `docs/data_overview.md` — dataset statistics snapshot (keep refreshed).
+  - `docs/medical_report.md` — clinical context and interpretation guidelines.
+- **External references:**
+  - BraTS challenge hub: <https://www.synapse.org/#!Synapse:syn51156910/wiki/>
+  - NiBabel orientation primer: <https://nipy.org/nibabel/orientation.html>
+
+- **Team contacts:**
+  - *Primary maintainer:* Assign at project kickoff (update here once defined).
+  - *Shared channel:* `#brats-post-tx` on Slack for Q&A and status updates.
+
+Keep iterating on this guide—thorough documentation keeps onboarding frictionless and lets the team focus on science.
