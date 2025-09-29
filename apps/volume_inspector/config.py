@@ -13,6 +13,11 @@ DISPLAY_MODES = {
         "scale": 2,
         "description": "Sharper slices (higher CPU)",
     },
+    "best": {
+        "label": "Best (4×)",
+        "scale": 4,
+        "description": "Maximum detail (heaviest CPU)",
+    },
 }
 
 DEFAULT_DISPLAY_MODE = "standard"

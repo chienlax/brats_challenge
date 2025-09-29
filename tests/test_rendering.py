@@ -9,12 +9,15 @@ def test_compose_rgba_slice_scale_multiplier() -> None:
     volume = np.linspace(0.0, 1.0, num=16, dtype=np.float32).reshape(4, 4)
     rgba_standard = rendering.compose_rgba_slice(volume, None, overlay=False, scale=1)
     rgba_high = rendering.compose_rgba_slice(volume, None, overlay=False, scale=2)
+    rgba_best = rendering.compose_rgba_slice(volume, None, overlay=False, scale=4)
 
     assert rgba_standard.shape[:2] == (4, 4)
     assert rgba_high.shape[:2] == (8, 8)
+    assert rgba_best.shape[:2] == (16, 16)
     # Alpha channel preserved
     assert rgba_standard.shape[2] == 4
     assert rgba_high.shape[2] == 4
+    assert rgba_best.shape[2] == 4
 
 
 def test_compose_rgba_slice_scales_segmentation() -> None:
