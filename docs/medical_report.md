@@ -1,6 +1,6 @@
 # Tumor Annotation
 
-Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩa chính xác bốn (4) lớp nhãn được sử dụng trong bộ dữ liệu BraTS 2024. Việc thống nhất sử dụng các thuật ngữ này—**ET, NETC, SNFH, RC**—là bắt buộc để đảm bảo tính nhất quán và chính xác.
+Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩa chính xác bốn (4) lớp nhãn được sử dụng trong bộ dữ liệu BraTS 2024.
 
 ## 1. Nguyên lý các Chuỗi xung MRI (MRI Sequences)
 
