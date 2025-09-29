@@ -6,13 +6,30 @@ from typing import Any, Dict, List, Mapping
 
 from dash import dcc, html
 
-from apps.common.volume_utils import AXIS_TO_INDEX
+from apps.common.volume_utils import AXIS_TO_INDEX, SEGMENTATION_LABELS
 
 from .config import DEFAULT_DISPLAY_MODE, DEFAULT_VIEW_MODE, DISPLAY_MODES, VIEW_MODES
 from .data import VolumeRepository
 
 
 DEFAULT_AXIS = "axial"
+
+
+def _build_segmentation_legend() -> html.Div:
+    entries: List[html.Div] = []
+    for label, (name, hex_color) in SEGMENTATION_LABELS.items():
+        if label == 0:
+            continue
+        entries.append(
+            html.Div(
+                className="legend-entry",
+                children=[
+                    html.Span(className="legend-swatch", style={"backgroundColor": hex_color}),
+                    html.Span(f"{label}: {name}", className="legend-label"),
+                ],
+            )
+        )
+    return html.Div(className="legend-container", children=[html.H4("Segmentation legend"), *entries])
 
 
 def _build_axis_marks(axis_size: int) -> Mapping[int, str]:
@@ -149,6 +166,7 @@ def build_layout(repo: VolumeRepository) -> html.Div:
                 children=dcc.Graph(id="orth-figure", config={"displayModeBar": False}),
             ),
             html.Div(id="slice-info", className="slice-info"),
+            _build_segmentation_legend(),
         ],
     )
 

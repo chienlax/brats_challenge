@@ -381,7 +381,8 @@ The server binds to `http://127.0.0.1:8050` by default and auto-indexes `trainin
 - Modality options reflect only the volumes available for the selected case.
 - Axis radio buttons and the slice slider stay within voxel bounds—no more index errors.
 - View mode selector toggles between a single-modality pane and a 2×2 grid of T1c/T1n/T2w/T2f (when present).
- - Display quality toggle offers Standard, High (2×), and Best (4×) upscaling tiers—bump it up when you need extra detail and don’t mind the extra CPU load.
+- Display quality toggle offers Standard, High (2×), and Best (4×) upscaling tiers—bump it up when you need extra detail and don’t mind the extra CPU load.
+- Segmentation legend sits under the viewer so you always know the colors: blue (Enhancing Tumor), red (Non-Enhancing Tumor), green (Peritumoral Edema/SNFH), yellow (Resection Cavity).
 - Segmentation overlay toggle respects BraTS color conventions and auto-disables when masks are absent.
 - The orthogonal preview panel maintains sagittal/coronal/axial context around the chosen slice.
 - Export downloads a timestamped PNG with the overlay baked in to your browser's download folder.
