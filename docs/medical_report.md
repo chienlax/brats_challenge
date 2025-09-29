@@ -125,13 +125,17 @@ Hình ảnh này là một "bảng tổng kết" các sai lầm kinh điển. H�
 
 ### **Lỗi 1 & 2: Nhầm lẫn Mạch máu (Vessel) và Đám rối màng mạch (Choroid Plexus) với U Bắt Thuốc (ET)**
 
+![alt text](image/img4.png)
+
 *   **Lỗi (Hàng trên):** Mô hình đã tô màu xanh dương (ET) cho cả các cấu trúc mạch máu và đám rối màng mạch.
 *   **Nguyên nhân của Lỗi:**
-    *   **Mạch máu:** Sau khi tiêm thuốc cản quang (T1-Gd), thuốc nằm bên trong lòng mạch máu. Do đó, các mạch máu sẽ "sáng" lên. Mô hình AI chỉ đơn giản thấy "tín hiệu sáng trên T1" và kết luận đó là u bắt thuốc.
-    *   **Đám rối màng mạch (Choroid Plexus):** Đám rối màng mạch là cấu trúc bình thường nằm trong não thất, có chức năng sản xuất dịch não tủy. Quan trọng nhất, nó **không có hàng rào máu não (BBB)**. Vì vậy, nó **luôn luôn bắt thuốc** một cách sinh lý bình thường. Mô hình AI lại bị đánh lừa bởi tín hiệu sáng này.
+    *   **Mạch máu:** Sau khi tiêm thuốc cản quang (T1-Gd), thuốc nằm bên trong lòng mạch máu. Do đó, các mạch máu sẽ "sáng" lên. Mô hình chỉ đơn giản thấy "tín hiệu sáng trên T1" và kết luận đó là u bắt thuốc.
+    *   **Đám rối màng mạch (Choroid Plexus):** Đám rối màng mạch là cấu trúc bình thường nằm trong não thất, có chức năng sản xuất dịch não tủy. Quan trọng nhất, nó **không có hàng rào máu não (BBB)**. Vì vậy, nó **luôn luôn bắt thuốc** một cách sinh lý bình thường. Mô hình bị đánh lừa bởi tín hiệu sáng này.
 *   **Sửa lỗi (Hàng dưới):** Chuyên gia đã xóa nhãn xanh dương khỏi các cấu trúc này. Việc phân biệt đòi hỏi kiến thức về giải phẫu: mạch máu có dạng ống, tuyến tính, còn đám rối màng mạch có vị trí và hình dạng đặc trưng bên trong não thất. Đây không phải là mô u.
 
 ### **Lỗi 3: Nhầm Tăng tín hiệu T1 tự nhiên (Intrinsic T1 Hyperintensity) với U Bắt Thuốc (ET)**
+
+![alt text](image/img5.png)
 
 *   **Lỗi (Hàng trên):** Mô hình tô xanh dương (ET) cho một vùng nhỏ.
 *   **Nguyên nhân của Lỗi:** Vùng này có thể chứa các sản phẩm thoái giáng của máu (methemoglobin) từ một vi xuất huyết cũ. Điều này làm nó sáng sẵn trên ảnh T1 *trước khi tiêm thuốc*. Do đó, nó cũng sáng trên ảnh T1-Gd. Mô hình lại bị tín hiệu sáng này đánh lừa.
@@ -139,17 +143,23 @@ Hình ảnh này là một "bảng tổng kết" các sai lầm kinh điển. H�
 
 ### **Lỗi 4: Nhầm Bệnh lý vi mạch (Microvascular Disease) với Phù/Thâm nhiễm (SNFH)**
 
+![alt text](image/img6.png)
+
 *   **Lỗi (Hàng trên):** Mô hình tô màu xanh lá (SNFH) cho các đốm và dải sáng trên FLAIR, cách xa khối u chính.
 *   **Nguyên nhân của Lỗi:** Bệnh lý thiếu máu vi mạch (thường gặp ở người lớn tuổi) gây ra các tổn thương nhỏ ở chất trắng, làm tăng hàm lượng nước và do đó sáng lên trên ảnh FLAIR. Mô hình chỉ thấy "sáng trên FLAIR" và kết luận đó là phù/thâm nhiễm liên quan đến u.
 *   **Sửa lỗi (Hàng dưới):** Chuyên gia nhận ra các tổn thương này không liên quan đến khối u (dựa vào vị trí, hình dạng, và bối cảnh lâm sàng). Do đó, chúng được **loại bỏ hoàn toàn** khỏi nhãn phân vùng. Không phải cứ sáng trên FLAIR là thuộc về khối u.
 
 ### **Lỗi 5: Nhầm Khoang phẫu thuật (RC) với Nhân u không bắt thuốc (NETC)**
 
+![alt text](image/img7.png)
+
 *   **Lỗi (Hàng trên):** Mô hình tô màu đỏ (NETC) cho một vùng lẽ ra phải là khoang phẫu thuật.
 *   **Nguyên nhân của Lỗi:** Cả hai đều có thể là những khoang chứa dịch, tối trên T1 và sáng trên T2. Tín hiệu của chúng có thể rất giống nhau, gây nhầm lẫn cho mô hình.
 *   **Sửa lỗi (Hàng dưới):** Chuyên gia dựa vào các đặc điểm khác: khoang phẫu thuật (RC) thường thông ra bề mặt não hoặc não thất, trong khi nhân hoại tử (NETC) thường là một khoang kín được bao bọc bởi u. Nhãn đã được sửa lại thành màu vàng (RC).
 
 ### **Lỗi 6: Khoang phẫu thuật (RC) lấn vào Não thất và Khoang ngoài trục**
+
+![alt text](image/img8.png)
 
 *   **Lỗi (Hàng trên):** Nhãn màu vàng (RC) bị "tràn" ra ngoài, lấn vào cả vùng não thất và không gian giữa não và xương sọ (khoang ngoài trục - extra-axial space).
 *   **Nguyên nhân của Lỗi:** Đây là lỗi phân vùng quá mức (over-segmentation). Tín hiệu của dịch trong khoang phẫu thuật và dịch não tủy trong não thất rất giống nhau, khiến mô hình không phân biệt được ranh giới.
