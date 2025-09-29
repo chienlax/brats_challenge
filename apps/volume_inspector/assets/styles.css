@@ -1,0 +1,60 @@
+.app-container {
+    display: flex;
+    flex-direction: row;
+    min-height: 100vh;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.sidebar {
+    flex: 0 0 320px;
+    padding: 24px;
+    background-color: #f7f9fb;
+    border-right: 1px solid #d9e2ec;
+}
+
+.sidebar h2 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    font-size: 1.5rem;
+    color: #12344d;
+}
+
+.control-group {
+    margin-top: 24px;
+}
+
+.export-button {
+    margin-top: 24px;
+    background-color: #1f77b4;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.export-button:hover {
+    background-color: #155d87;
+}
+
+.main-view {
+    flex: 1;
+    padding: 24px;
+    background-color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.slice-info {
+    font-size: 0.95rem;
+    color: #1f2933;
+}
+
+.overlay-checkbox {
+    margin-top: 20px;
+}
+
+.dash-graph {
+    background-color: #ffffff !important;
+}

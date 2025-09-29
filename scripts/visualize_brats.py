@@ -10,97 +10,25 @@ Example usage:
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Tuple
 
 import matplotlib.pyplot as plt
-import nibabel as nib
-import numpy as np
-from matplotlib import colors
 from matplotlib import patches
+import numpy as np
 
-MODALITY_LABELS: Mapping[str, str] = {
-    "t1c": "T1-weighted (post-contrast)",
-    "t1n": "T1-weighted (pre-contrast)",
-    "t2f": "T2 FLAIR",
-    "t2w": "T2-weighted",
-}
-
-# Post-treatment BraTS 2024 semantic labels (per challenge guidelines).
-SEGMENTATION_LABELS: Mapping[int, Tuple[str, str]] = {
-    0: ("Background", "#00000000"),
-    1: ("Enhancing Tumor", "#1f77b4"),  # Blue
-    2: ("Non-Enhancing Tumor", "#d62728"),  # Red
-    3: ("Peritumoral Edema / SNFH", "#2ca02c"),  # Green
-    4: ("Resection Cavity", "#f1c40f"),  # Yellow
-}
-
-AXIS_TO_INDEX = {"sagittal": 0, "coronal": 1, "axial": 2}
-
-
-def infer_case_prefix(case_dir: Path) -> str:
-    seg_files = list(case_dir.glob("*-seg.nii.gz"))
-    if not seg_files:
-        raise FileNotFoundError(f"Could not find a segmentation file (*-seg.nii.gz) in {case_dir}.")
-    return seg_files[0].name.replace("-seg.nii.gz", "")
-
-
-def load_volume(path: Path) -> np.ndarray:
-    img = nib.load(str(path))
-    return img.get_fdata(dtype=np.float32)
-
-
-def normalize_intensity(volume: np.ndarray) -> np.ndarray:
-    finite_mask = np.isfinite(volume)
-    if not np.any(finite_mask):
-        return np.zeros_like(volume, dtype=np.float32)
-
-    cleaned = volume[finite_mask]
-    lo, hi = np.percentile(cleaned, (1, 99))
-    if math.isclose(lo, hi):
-        lo, hi = cleaned.min(), cleaned.max()
-    if math.isclose(lo, hi):
-        return np.clip(volume, 0.0, 1.0)
-
-    normalized = (volume - lo) / (hi - lo)
-    return np.clip(normalized, 0.0, 1.0)
-
-
-def prepare_slice(volume: np.ndarray, axis_name: str, index: int) -> np.ndarray:
-    axis = AXIS_TO_INDEX[axis_name]
-    slicer: List[slice | int] = [slice(None)] * 3
-    slicer[axis] = index
-    data = volume[tuple(slicer)]
-
-    if axis_name == "axial":
-        rotated = np.rot90(data)
-    elif axis_name == "coronal":
-        rotated = np.rot90(np.flipud(data))
-    else:  # sagittal
-        rotated = np.rot90(np.flipud(data))
-    return rotated
-
-
-def pick_slice_index(volume: np.ndarray, axis_name: str, index: int | None, fraction: float) -> int:
-    axis = AXIS_TO_INDEX[axis_name]
-    max_index = volume.shape[axis]
-    if index is not None:
-        if not (0 <= index < max_index):
-            raise ValueError(f"Slice index {index} is out of bounds for axis {axis_name} with size {max_index}.")
-        return index
-    fraction = float(np.clip(fraction, 0.0, 1.0))
-    return int(round(fraction * (max_index - 1)))
-
-
-def build_segmentation_colormap() -> Tuple[colors.ListedColormap, colors.BoundaryNorm]:
-    rgba = []
-    for label in range(max(SEGMENTATION_LABELS) + 1):
-        _, hex_color = SEGMENTATION_LABELS.get(label, (f"Label {label}", "#ffffff"))
-        rgba.append(colors.to_rgba(hex_color))
-    cmap = colors.ListedColormap(rgba)
-    norm = colors.BoundaryNorm(np.arange(len(rgba) + 1) - 0.5, len(rgba))
-    return cmap, norm
+from apps.common.volume_utils import (
+    AXIS_TO_INDEX,
+    MODALITY_LABELS,
+    SEGMENTATION_LABELS,
+    build_segmentation_colormap,
+    infer_case_prefix,
+    load_segmentation,
+    pick_slice_index,
+    prepare_slice,
+    prepare_volumes,
+    segmentation_legend_handles,
+)
 
 
 def create_modalities_panel(
@@ -163,32 +91,9 @@ def create_orthogonal_panel(
 
 
 def add_segmentation_legend(fig: plt.Figure) -> None:
-    handles = []
-    for label, (name, hex_color) in SEGMENTATION_LABELS.items():
-        if label == 0:
-            continue
-        handles.append(patches.Patch(color=hex_color, label=f"{label}: {name}"))
+    handles = segmentation_legend_handles()
     if handles:
         fig.legend(handles=handles, loc="lower center", ncol=min(3, len(handles)))
-
-
-def prepare_volumes(case_dir: Path, case_prefix: str) -> Dict[str, np.ndarray]:
-    volumes: Dict[str, np.ndarray] = {}
-    for modality in MODALITY_LABELS:
-        path = case_dir / f"{case_prefix}-{modality}.nii.gz"
-        if path.exists():
-            volumes[modality] = normalize_intensity(load_volume(path))
-    if not volumes:
-        raise FileNotFoundError(f"No imaging modalities were found in {case_dir}.")
-    return volumes
-
-
-def load_segmentation(case_dir: Path, case_prefix: str) -> np.ndarray | None:
-    seg_path = case_dir / f"{case_prefix}-seg.nii.gz"
-    if not seg_path.exists():
-        return None
-    data = load_volume(seg_path)
-    return np.rint(data).astype(np.int16)
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:

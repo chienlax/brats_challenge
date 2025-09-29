@@ -18,6 +18,7 @@ analysis/visualization workflow that ships with this repository.
   - [6.3 Per-case histograms (`generate_case_statistics.py`)](#63-per-case-histograms-generate_case_statisticspy)
   - [6.4 GIF generator (`generate_case_gifs.py`)](#64-gif-generator-generate_case_gifspy)
   - [6.5 Volume pre-renderer (`precompute_volume_visuals.py`)](#65-volume-pre-renderer-precompute_volume_visualspy)
+  - [6.6 Interactive volume inspector (`launch_volume_inspector.py`)](#66-interactive-volume-inspector-launch_volume_inspectorpy)
 - [7. Interactive notebook (`notebooks/brats_exploration.ipynb`)](#7-interactive-notebook-notebooksbrats_explorationipynb)
 - [8. Outputs & artifact management](#8-outputs--artifact-management)
 - [9. Automation & batching tips](#9-automation--batching-tips)
@@ -143,7 +144,8 @@ pip list | Select-String nibabel
 | 2 | Case deep-dive | `generate_case_statistics.py` | Histogram PNGs + label table per case |
 | 3 | Publication figures | `visualize_brats.py` | High-res modality panels or orthogonal views |
 | 4 | Animation reels | `generate_case_gifs.py` | GIFs sweeping through slices |
-| 5 | Interactive exploration | `brats_exploration.ipynb` | Widgets for slicing, analytics, and quick prototyping |
+| 5 | Interactive inspection | `launch_volume_inspector.py` | Dash web app for multi-modal slice browsing with overlays |
+| 6 | Interactive exploration | `brats_exploration.ipynb` | Widgets for slicing, analytics, and quick prototyping |
 
 Follow the steps sequentially for onboarding or run them à la carte depending on your task.
 
@@ -318,48 +320,73 @@ python scripts/generate_case_gifs.py --root training_data_additional --output-di
 
 **Purpose:**
 
-- Batch-render standalone, interactive 3D viewers (HTML) for each case/modality, so you can open volumes instantly without reprocessing.
-- Optionally overlay segmentation labels as translucent isosurfaces when `*-seg.nii.gz` files are present.
+- Generate full slice stacks plus Plotly HTML viewers for lightning-fast auditing outside Python.
+- Validate segmentation overlays and modality completeness before downstream processing.
 
-**Quick start:**
-
-```powershell
-python scripts/precompute_volume_visuals.py --root training_data_additional `
-  --output-dir outputs/volumes --modality t1c --with-segmentation --downsample 2
-```
-
-Open a single case immediately after rendering:
+**Example command:**
 
 ```powershell
-python scripts/precompute_volume_visuals.py --case BraTS-GLI-02405-100 `
-  --output-dir outputs/volumes --open
+python scripts/precompute_volume_visuals.py --case BraTS-GLI-02405-100 --output-dir outputs/volumes --open
 ```
+
+**Flags:**
+
+| Flag | Description |
+|------|-------------|
+| `--case CASE_ID` | Render a single case (skips directory scan). |
+| `--root PATH` | Batch every case under the folder. |
+| `--axis {axial,coronal,sagittal}` | Slice direction (default `axial`). |
+| `--step N` | Skip slices to shrink output (default 1). |
+| `--overlay/--no-overlay` | Toggle segmentation overlay (on by default). |
+| `--output-dir PATH` | Destination directory (auto-created). |
+| `--open` | Launch the default viewer when processing a single case. |
+
+**Notes:**
+
+- Output tree: `outputs/volumes/<CASE>/<AXIS>/slice_###.png` plus interactive HTML overlays.
+- Pair with `generate_case_gifs.py` to create animations from the cached PNGs.
+- For spinning disks, keep `--step` high or run cases sequentially to avoid IO thrash.
+
+### 6.6 Interactive volume inspector (`launch_volume_inspector.py`)
+
+**Purpose:**
+
+- Spin up a Dash web app for real-time modality navigation with segmentation overlays.
+- Browse multiple datasets without editing notebooks or saving intermediate files.
+- Export the active slice as a PNG straight from your browser.
+
+**Basic launch:**
+
+```powershell
+python scripts/launch_volume_inspector.py --open-browser
+```
+
+The server binds to `http://127.0.0.1:8050` by default and auto-indexes `training_data`, `training_data_additional`, and `validation_data` when present.
 
 **Key flags:**
 
 | Flag | Description |
 |------|-------------|
-| `--root PATH` | Dataset directory containing case folders (default `training_data_additional`). |
-| `--case CASE_ID` | Target a single case; repeat flag to enumerate multiple cases. |
-| `--cases-file FILE` | Text file with one case ID per line. Useful for curated subsets. |
-| `--modality {t1c,t1n,t2f,t2w}` | Modality to render (default `t1c`). |
-| `--with-segmentation` | Adds segmentation isosurfaces (labels 1–4) when available. |
-| `--downsample N` | Subsample stride for voxels (default 2). Lower for fidelity, higher for lighter HTML. |
-| `--output-dir PATH` | Destination for HTML viewers (default `outputs/volumes`). |
-| `--skip-existing` / `--overwrite` | Control idempotency vs. regeneration of existing HTML files. |
-| `--open` | Launch each freshly generated HTML file in your default browser (best for single-case runs). |
-| `--strict` | Abort on the first failure instead of continuing. |
+| `--data-root PATH` | Add extra dataset folders (repeat the flag as needed). |
+| `--host HOST` | Bind address; use `0.0.0.0` for LAN sharing. |
+| `--port PORT` | Override the default port (`8050`). |
+| `--debug` | Enable Dash hot reload + verbose logging. |
+| `--open-browser` | Launch the default browser once the server is ready. |
 
-**Outputs:**
+**UI cheat sheet:**
 
-- One HTML file per processed case (e.g., `outputs/volumes/BraTS-GLI-02405-100_t1c_volume.html`).
-- Each viewer includes a grayscale volume trace plus optional colored label isosurfaces. Use the Plotly controls to orbit, zoom, and adjust opacity.
+- Dataset + case dropdowns mirror the on-disk directory structure; missing roots are skipped quietly.
+- Modality options reflect only the volumes available for the selected case.
+- Axis radio buttons and the slice slider stay within voxel bounds—no more index errors.
+- Segmentation overlay toggle respects BraTS color conventions and auto-disables when masks are absent.
+- The orthogonal preview panel maintains sagittal/coronal/axial context around the chosen slice.
+- Export downloads a timestamped PNG with the overlay baked in to your browser's download folder.
 
-**Performance notes:**
+**Operational tips:**
 
-- Downsampling by 2 preserves fine structure while keeping HTML files ~30–60 MB. Increase the stride for preview runs on low-power machines.
-- Rendering with segmentation isosurfaces requires more memory; if the browser struggles, raise the downsampling factor or omit `--with-segmentation` for the first pass.
-- The script injects Plotly from CDN (`include_plotlyjs="cdn"`); the HTML viewers work offline after first load thanks to cached assets.
+- Recent cases are cached in memory (LRU, 16 entries); restart the app to clear the cache.
+- Chromium-based browsers (Edge/Chrome) deliver smoother slider interaction thanks to WebGL acceleration.
+- When exposing beyond localhost, update firewall rules accordingly—the app intentionally has no authentication layer.
 
 ---
 
