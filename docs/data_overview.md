@@ -64,12 +64,12 @@ Labels are encoded as integers within the `*-seg.nii.gz` masks.
 
 Percentages are computed relative to all tumor-class voxels (labels 1–4). These numbers are reproduced in `outputs/dataset_stats.json` and in the notebook’s label analytics section.
 
-Color legend (used consistently across visualization, notebook, and GIF scripts):
+Color legend (aligned with the official BraTS guidance and used across visualization, notebook, and GIF scripts):
 
-- `1` Enhancing tumor → `#ff4f40`
-- `2` Non-enhancing tumor → `#ffb347`
-- `3` Peritumoral edema → `#42c6ff`
-- `4` Resection cavity → `#9b59b6`
+- `1` Enhancing tumor → `#1f77b4` (blue)
+- `2` Non-enhancing tumor → `#d62728` (red)
+- `3` Peritumoral edema / SNFH → `#2ca02c` (green)
+- `4` Resection cavity → `#f1c40f` (yellow)
 
 ---
 

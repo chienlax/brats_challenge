@@ -30,10 +30,10 @@ MODALITY_LABELS: Mapping[str, str] = {
 # Post-treatment BraTS 2025 semantic labels (per challenge guidelines).
 SEGMENTATION_LABELS: Mapping[int, Tuple[str, str]] = {
     0: ("Background", "#00000000"),
-    1: ("Enhancing Tumor", "#ff4f40"),
-    2: ("Non-Enhancing Tumor", "#ffb347"),
-    3: ("Peritumoral Edema", "#42c6ff"),
-    4: ("Resection Cavity", "#9b59b6"),
+    1: ("Enhancing Tumor", "#1f77b4"),  # Blue
+    2: ("Non-Enhancing Tumor", "#d62728"),  # Red
+    3: ("Peritumoral Edema / SNFH", "#2ca02c"),  # Green
+    4: ("Resection Cavity", "#f1c40f"),  # Yellow
 }
 
 AXIS_TO_INDEX = {"sagittal": 0, "coronal": 1, "axial": 2}

@@ -29,7 +29,7 @@ Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩ
 
 ### **1.3. FLAIR (Fluid-Attenuated Inversion Recovery)**
 *   **Tên gọi:** Chuỗi xung phục hồi đảo ngược xóa tín hiệu dịch.
-*   **Analogy:** "Bản đồ bệnh lý nâng cao". Đây là một phiên bản T2w được tinh chỉnh để làm nổi bật tổn thương.
+*   **Analogy:** "Bản đồ bệnh lý nâng cao". Đây là một phiên bản T2 được tinh chỉnh để làm nổi bật tổn thương.
 *   **Nguyên lý cốt lõi:** Về cơ bản là một chuỗi xung T2, nhưng nó có thêm một bước để **xóa tín hiệu của dịch não tủy (CSF)**, làm cho CSF trở nên đen. Điều này cực kỳ quan trọng, vì nó giúp các tổn thương chứa nước khác (như phù não) nổi bật lên một cách ngoạn mục, đặc biệt khi chúng nằm gần não thất.
 *   **Vai trò trong việc gán nhãn:**
     *   Là chuỗi xung **quan trọng nhất và tốt nhất** để xác định ranh giới của **Surrounding Non-enhancing FLAIR Hyperintensity (SNFH)**. Vùng này sẽ sáng rực trên nền não và CSF tối, giúp việc khoanh vùng chính xác hơn nhiều.
@@ -39,7 +39,7 @@ Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩ
 *   **Analogy:** "Bản đồ hoạt động của u". Nó chỉ ra nơi nào hàng rào máu não bị phá vỡ, tức là nơi các tế bào u đang hoạt động mạnh mẽ nhất.
 *   **Nguyên lý cốt lõi:** U ác tính tạo ra các mạch máu bất thường làm hỏng hàng rào máu não (Blood-Brain Barrier - BBB). Khi tiêm thuốc cản quang, thuốc sẽ rò rỉ qua hàng rào này và tích tụ trong mô u, làm vùng đó **sáng rực** lên trên ảnh T1.
 *   **Vai trò trong việc gán nhãn:**
-    *   Là chuỗi xung **duy nhất và quyết định** để xác định **Enhancing Tissue (ET)**. Một vùng được coi là ET khi và chỉ khi nó tối/mờ trên T1w và trở nên sáng rõ trên T1-Gd.
+    *   Là chuỗi xung **duy nhất và quyết định** để xác định **Enhancing Tissue (ET)**. Một vùng được coi là ET khi và chỉ khi nó tối/mờ trên T1 và trở nên sáng rõ trên T1-Gd.
 
 ---
 

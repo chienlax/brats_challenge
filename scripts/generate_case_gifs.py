@@ -26,10 +26,10 @@ from matplotlib.colors import ListedColormap
 MODALITIES = ("t1c", "t1n", "t2f", "t2w")
 LABEL_COLORS = {
     0: "#00000000",
-    1: "#ff4f40",
-    2: "#ffb347",
-    3: "#42c6ff",
-    4: "#9b59b6",
+    1: "#1f77b4",  # Enhancing Tumor (blue)
+    2: "#d62728",  # Non-Enhancing Tumor (red)
+    3: "#2ca02c",  # Peritumoral Edema / SNFH (green)
+    4: "#f1c40f",  # Resection Cavity (yellow)
 }
 
 

@@ -23,7 +23,7 @@ LABEL_MAP = {
     0: "Background",
     1: "Enhancing Tumor",
     2: "Non-Enhancing Tumor",
-    3: "Peritumoral Edema",
+    3: "Peritumoral Edema / SNFH",
     4: "Resection Cavity",
 }
 

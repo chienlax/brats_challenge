@@ -27,6 +27,7 @@ Thumbs.db
 training_data/
 training_data_additional/
 validation_data/
+scripts/__pycache__/
 
 # Derived artifacts
 outputs/
