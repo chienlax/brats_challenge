@@ -1,0 +1,47 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+build/
+dist/
+.eggs/
+*.egg-info/
+scripts/__pycache__/
+
+# Virtual environments
+.venv/
+venv/
+env/
+*.venv/
+
+# IDE and editor metadata
+.vscode/
+.idea/
+*.code-workspace
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Dataset directories (large, not tracked)
+training_data/
+training_data_additional/
+validation_data/
+
+# Derived artifacts
+outputs/
+outputs/**/*.json
+logs/
+
+# Medical imaging files (generated or raw copies)
+*.nii
+*.nii.gz
+
+# Notebook auxiliary files
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# Media exports
+*.png
+*.gif
+*.mp4
