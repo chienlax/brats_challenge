@@ -8,6 +8,7 @@ from dash import dcc, html
 
 from apps.common.volume_utils import AXIS_TO_INDEX
 
+from .config import DEFAULT_DISPLAY_MODE, DEFAULT_VIEW_MODE, DISPLAY_MODES, VIEW_MODES
 from .data import VolumeRepository
 
 
@@ -50,6 +51,9 @@ def build_layout(repo: VolumeRepository) -> html.Div:
         slider_value = slider_max // 2 if slider_max > 0 else 0
         slider_marks = _build_axis_marks(slider_max + 1)
 
+    quality_options = [{"label": cfg["label"], "value": key} for key, cfg in DISPLAY_MODES.items()]
+    view_mode_options = [{"label": cfg["label"], "value": key} for key, cfg in VIEW_MODES.items()]
+
     controls = html.Div(
         className="sidebar",
         children=[
@@ -84,6 +88,18 @@ def build_layout(repo: VolumeRepository) -> html.Div:
             html.Div(
                 className="control-group",
                 children=[
+                    html.Label("View mode"),
+                    dcc.RadioItems(
+                        id="view-mode",
+                        options=view_mode_options,
+                        value=DEFAULT_VIEW_MODE,
+                        labelStyle={"display": "inline-block", "margin-right": "12px"},
+                    ),
+                ],
+            ),
+            html.Div(
+                className="control-group",
+                children=[
                     html.Label("Slice index"),
                     dcc.Slider(
                         id="slice-slider",
@@ -100,6 +116,18 @@ def build_layout(repo: VolumeRepository) -> html.Div:
                 options=[{"label": "Show segmentation overlay", "value": "overlay"}],
                 value=["overlay"],
                 inputClassName="overlay-checkbox",
+            ),
+            html.Div(
+                className="control-group",
+                children=[
+                    html.Label("Display quality"),
+                    dcc.RadioItems(
+                        id="display-quality",
+                        options=[{"label": opt["label"], "value": opt["value"]} for opt in quality_options],
+                        value=DEFAULT_DISPLAY_MODE,
+                        labelStyle={"display": "inline-block", "margin-right": "12px"},
+                    ),
+                ],
             ),
             html.Button("Export current slice", id="export-button", n_clicks=0, className="export-button"),
             dcc.Download(id="export-download"),

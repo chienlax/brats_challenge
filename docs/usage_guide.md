@@ -121,9 +121,11 @@ pip list | Select-String nibabel
 
 ## 4. Data acquisition & directory hygiene
 
-1. **Retrieve the BraTS archives** from the consortium’s secure storage (ask the project lead for the path and credentials).
+1. **Retrieve the BraTS archives** from the consortium’s secure storage.
+- Addisonal training data: [Google Drive](https://drive.google.com/drive/folders/1uHZ_A4tNVQoLjKkYlh1kMkDJYIWMs9NN?usp=sharing)
+- Validation data: [Google Drive](https://drive.google.com/drive/folders/1bBs_z1IvppZqmtUYOM2iJsD-9g5ZkGKC?usp=sharing)
 2. **Extract** the archives so each case sits in its own folder: `BraTS-GLI-XXXXX-YYY/`.
-3. **Place or symlink** those folders under `training_data_additional/` (primary cohort). Legacy data may live in `training_data/`; validation drops belong in `validation_data/`.
+3. **Place** those folders under `training_data_additional/` (primary cohort). Legacy data may live in `training_data/`; validation drops belong in `validation_data/`.
 4. **Verify counts**:
    ```powershell
    (Get-ChildItem training_data_additional -Directory).Count
@@ -378,6 +380,8 @@ The server binds to `http://127.0.0.1:8050` by default and auto-indexes `trainin
 - Dataset + case dropdowns mirror the on-disk directory structure; missing roots are skipped quietly.
 - Modality options reflect only the volumes available for the selected case.
 - Axis radio buttons and the slice slider stay within voxel bounds—no more index errors.
+- View mode selector toggles between a single-modality pane and a 2×2 grid of T1c/T1n/T2w/T2f (when present).
+- Display quality toggle upsamples the render 2× for sharper viewing/exports when you have the CPU headroom.
 - Segmentation overlay toggle respects BraTS color conventions and auto-disables when masks are absent.
 - The orthogonal preview panel maintains sagittal/coronal/axial context around the chosen slice.
 - Export downloads a timestamped PNG with the overlay baked in to your browser's download folder.

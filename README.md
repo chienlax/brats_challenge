@@ -1,5 +1,7 @@
 # BraTS Post-treatment
 
+**For detailed setup instruction, go to: ![alt text](docs/usage_guide.md)**
+
 ## Setup
 
 Create and activate the Python environment (already configured in `.venv/`):
@@ -81,6 +83,8 @@ python scripts/launch_volume_inspector.py --open-browser
 ```
 
 Key features: dataset/case dropdowns, modality-aware axis slider, segmentation toggles, orthogonal previews, and one-click PNG export of the active slice.
+Use the display quality toggle to switch to a 2× upscale when you need sharper views or exports.
+Flip the view mode to “All modalities” to inspect T1c/T1n/T2w/T2f slices side-by-side while keeping overlays intact.
 
 ## Interactive notebook
 

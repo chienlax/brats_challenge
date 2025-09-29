@@ -7,12 +7,20 @@ import io
 from typing import List, Mapping
 
 import imageio.v2 as iio
-from dash import Dash, Input, Output, State, no_update, dcc
+from dash import Dash, Input, Output, State, dcc, no_update
 
 from apps.common.volume_utils import AXIS_TO_INDEX, prepare_slice
 
+from .config import DEFAULT_VIEW_MODE, display_mode_scale
 from .data import VolumeRepository
-from .rendering import blank_figure, compose_rgba_slice, create_orthogonal_figure, create_slice_figure
+from .rendering import (
+    blank_figure,
+    compose_modalities_grid,
+    compose_rgba_slice,
+    create_modalities_figure,
+    create_orthogonal_figure,
+    create_slice_figure,
+)
 
 
 def _ensure_jsonable(metadata: Mapping[str, object]) -> Mapping[str, object]:
@@ -89,6 +97,8 @@ def register_callbacks(app: Dash, repo: VolumeRepository) -> None:
         Input("slice-slider", "value"),
         Input("modality-select", "value"),
         Input("overlay-toggle", "value"),
+        Input("display-quality", "value"),
+        Input("view-mode", "value"),
     )
     def update_figures(
         case_key: str | None,
@@ -97,31 +107,56 @@ def register_callbacks(app: Dash, repo: VolumeRepository) -> None:
         slice_index: int,
         modality: str | None,
         overlay_toggle: List[str] | None,
+        display_mode: str | None,
+        view_mode: str | None,
     ):
         if not case_key or not metadata or not modality:
             return blank_figure(), blank_figure(), ""
 
         overlay_enabled = bool(overlay_toggle and "overlay" in overlay_toggle)
+        scale = display_mode_scale(display_mode)
+        effective_view_mode = view_mode or DEFAULT_VIEW_MODE
         volumes, segmentation = repo.volumes(case_key)
-        if modality not in volumes:
+        if modality not in volumes and volumes:
             modality = next(iter(volumes))
         axis_index = AXIS_TO_INDEX[axis_name]
         axis_length = int(metadata.get("shape", [1, 1, 1])[axis_index])
         clamped_index = max(0, min(slice_index or 0, axis_length - 1))
 
-        main_fig = create_slice_figure(volumes, segmentation, modality, axis_name, clamped_index, overlay_enabled)
+        if effective_view_mode == "all":
+            main_fig = create_modalities_figure(
+                volumes,
+                segmentation,
+                axis_name,
+                clamped_index,
+                overlay_enabled,
+                scale=scale,
+            )
+            orth_fig = blank_figure("Switch to single modality view for orthogonal slices.")
+            modality_label = "All modalities"
+        else:
+            main_fig = create_slice_figure(
+                volumes,
+                segmentation,
+                modality,
+                axis_name,
+                clamped_index,
+                overlay_enabled,
+                scale=scale,
+            )
 
-        volume = volumes[modality]
-        indices = {
-            "sagittal": int(metadata.get("shape", [1, 1, 1])[0]) // 2,
-            "coronal": int(metadata.get("shape", [1, 1, 1])[1]) // 2,
-            "axial": int(metadata.get("shape", [1, 1, 1])[2]) // 2,
-        }
-        indices[axis_name] = clamped_index
-        orth_fig = create_orthogonal_figure(volume, segmentation, indices, overlay_enabled)
+            volume = volumes[modality]
+            indices = {
+                "sagittal": int(metadata.get("shape", [1, 1, 1])[0]) // 2,
+                "coronal": int(metadata.get("shape", [1, 1, 1])[1]) // 2,
+                "axial": int(metadata.get("shape", [1, 1, 1])[2]) // 2,
+            }
+            indices[axis_name] = clamped_index
+            orth_fig = create_orthogonal_figure(volume, segmentation, indices, overlay_enabled, scale=scale)
+            modality_label = f"Modality {modality.upper()}"
 
         case_id = metadata.get("case_id", "Unknown")
-        info = f"Case {case_id} · Modality {modality.upper()} · {axis_name.capitalize()} slice {clamped_index}/{axis_length - 1}"
+        info = f"Case {case_id} · {modality_label} · {axis_name.capitalize()} slice {clamped_index}/{max(axis_length - 1, 0)}"
         if segmentation is None:
             info += " · Segmentation unavailable"
         elif overlay_enabled:
@@ -140,6 +175,8 @@ def register_callbacks(app: Dash, repo: VolumeRepository) -> None:
         State("slice-slider", "value"),
         State("modality-select", "value"),
         State("overlay-toggle", "value"),
+        State("display-quality", "value"),
+        State("view-mode", "value"),
         prevent_initial_call=True,
     )
     def export_slice(
@@ -150,18 +187,38 @@ def register_callbacks(app: Dash, repo: VolumeRepository) -> None:
         slice_index: int,
         modality: str | None,
         overlay_toggle: List[str] | None,
+        display_mode: str | None,
+        view_mode: str | None,
     ):
         if not case_key or not metadata or not modality:
             return no_update
 
         overlay_enabled = bool(overlay_toggle and "overlay" in overlay_toggle)
+        scale = display_mode_scale(display_mode)
+        effective_view_mode = view_mode or DEFAULT_VIEW_MODE
         volumes, segmentation = repo.volumes(case_key)
         if modality not in volumes:
             modality = next(iter(volumes))
 
-        slice_array = prepare_slice(volumes[modality], axis_name, slice_index)
-        seg_slice = prepare_slice(segmentation, axis_name, slice_index) if overlay_enabled and segmentation is not None else None
-        rgba = compose_rgba_slice(slice_array, seg_slice, overlay_enabled and segmentation is not None)
+        if effective_view_mode == "all":
+            rgba, _, _, _ = compose_modalities_grid(
+                volumes,
+                segmentation,
+                axis_name,
+                slice_index,
+                overlay_enabled,
+                scale=scale,
+            )
+            modality_suffix = "all"
+        else:
+            slice_array = prepare_slice(volumes[modality], axis_name, slice_index)
+            seg_slice = (
+                prepare_slice(segmentation, axis_name, slice_index)
+                if overlay_enabled and segmentation is not None
+                else None
+            )
+            rgba = compose_rgba_slice(slice_array, seg_slice, overlay_enabled and segmentation is not None, scale=scale)
+            modality_suffix = modality
 
         buffer = io.BytesIO()
         iio.imwrite(buffer, rgba, format="png")
@@ -169,7 +226,7 @@ def register_callbacks(app: Dash, repo: VolumeRepository) -> None:
 
         case_id = metadata.get("case_id", "case")
         timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"{case_id}_{modality}_{axis_name}_{slice_index}_{timestamp}.png"
+        filename = f"{case_id}_{modality_suffix}_{axis_name}_{slice_index}_{timestamp}.png"
         return dcc.send_bytes(buffer.getvalue, filename)
 
 
