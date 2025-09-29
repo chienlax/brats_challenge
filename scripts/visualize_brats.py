@@ -27,7 +27,7 @@ MODALITY_LABELS: Mapping[str, str] = {
     "t2w": "T2-weighted",
 }
 
-# Post-treatment BraTS 2025 semantic labels (per challenge guidelines).
+# Post-treatment BraTS 2024 semantic labels (per challenge guidelines).
 SEGMENTATION_LABELS: Mapping[int, Tuple[str, str]] = {
     0: ("Background", "#00000000"),
     1: ("Enhancing Tumor", "#1f77b4"),  # Blue

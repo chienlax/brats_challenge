@@ -27,7 +27,6 @@ Thumbs.db
 training_data/
 training_data_additional/
 validation_data/
-scripts/__pycache__/
 
 # Derived artifacts
 outputs/
@@ -46,3 +45,7 @@ logs/
 *.png
 *.gif
 *.mp4
+
+# Allow checked-in documentation imagery
+!docs/image/
+!docs/image/**
