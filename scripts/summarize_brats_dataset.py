@@ -19,6 +19,7 @@ from typing import Dict, Iterable, List, Mapping, Tuple
 
 import nibabel as nib
 import numpy as np
+from nibabel.orientations import aff2axcodes
 
 MODALITIES = ("t1c", "t1n", "t2f", "t2w")
 
@@ -29,6 +30,7 @@ class CaseSummary:
     modalities_present: List[str]
     shape: Tuple[int, int, int]
     voxel_spacing: Tuple[float, float, float]
+    orientation: Tuple[str, str, str]
     intensity_stats: Mapping[str, Mapping[str, float]]
     modality_dtypes: Mapping[str, str]
     segmentation_labels: Mapping[int, int]
@@ -68,6 +70,7 @@ def collect_case_summary(case_dir: Path) -> CaseSummary:
     modalities_present: List[str] = []
     shape = None
     spacing = None
+    orientation = None
 
     for modality in MODALITIES:
         path = case_dir / f"{case_prefix}-{modality}.nii.gz"
@@ -81,6 +84,7 @@ def collect_case_summary(case_dir: Path) -> CaseSummary:
                 shape = tuple(int(v) for v in data.shape)
                 pixdim = img.header.get_zooms()[:3]
                 spacing = tuple(float(round(v, 3)) for v in pixdim)
+                orientation = aff2axcodes(img.affine)
         else:
             modality_stats[modality] = {}
             modality_dtypes[modality] = "missing"
@@ -103,6 +107,7 @@ def collect_case_summary(case_dir: Path) -> CaseSummary:
         intensity_stats=modality_stats,
         segmentation_labels=seg_labels,
         modality_dtypes=modality_dtypes,
+        orientation=orientation if orientation is not None else ("?", "?", "?"),
     )
 
 
@@ -112,6 +117,7 @@ def aggregate_summaries(summaries: Iterable[CaseSummary]) -> Dict[str, object]:
     spacing_counts = Counter()
     modality_presence = Counter()
     dtype_counts = defaultdict(Counter)
+    orientation_counts = Counter()
     label_counts = Counter()
     intensity_agg: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
 
@@ -129,6 +135,7 @@ def aggregate_summaries(summaries: Iterable[CaseSummary]) -> Dict[str, object]:
             dtype_counts[modality][dtype] += 1
         for label, count in summary.segmentation_labels.items():
             label_counts[label] += count
+        orientation_counts[str(summary.orientation)] += 1
 
     intensity_summary: Dict[str, Dict[str, Dict[str, float]]] = {}
     for modality, stats in intensity_agg.items():
@@ -148,7 +155,8 @@ def aggregate_summaries(summaries: Iterable[CaseSummary]) -> Dict[str, object]:
         "modality_presence": modality_presence,
         "intensity_summary": intensity_summary,
     "label_counts": {int(label): int(count) for label, count in label_counts.items()},
-    "dtype_counts": {modality: convert_counters(counter) for modality, counter in dtype_counts.items()},
+        "dtype_counts": {modality: convert_counters(counter) for modality, counter in dtype_counts.items()},
+        "orientation_counts": orientation_counts,
     }
 
 
@@ -198,6 +206,7 @@ def main(argv: Iterable[str] | None = None) -> None:
                 "modalities_present": summary.modalities_present,
                 "shape": summary.shape,
                 "voxel_spacing": summary.voxel_spacing,
+                "orientation": summary.orientation,
                 "intensity_stats": summary.intensity_stats,
                 "modality_dtypes": summary.modality_dtypes,
                 "segmentation_labels": summary.segmentation_labels,

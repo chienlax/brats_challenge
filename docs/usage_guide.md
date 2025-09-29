@@ -57,6 +57,18 @@ brats_challenge/
 - Scripts assume NIfTI files with valid affine matrices; malformed data will raise
   informative exceptions (file not found, dtype mismatch, etc.).
 
+### Segmentation label encoding
+
+| Label | Region | Notes |
+|-------|--------|-------|
+| `0` | Background | Healthy tissue / outside brain |
+| `1` | Enhancing tumor (ET) | Post-contrast enhancing regions |
+| `2` | Non-enhancing tumor (NET) | Includes necrosis and non-enhancing core |
+| `3` | Peritumoral edema (ED) | Hyperintense edema on FLAIR/T2 |
+| `4` | Resection cavity (RC) | Post-surgical cavity |
+
+`scripts/visualize_brats.py` overlays these labels automatically with distinct colors.
+
 ### Data quality checks
 
 Run the dataset summary script (Section 4) to confirm geometry consistency,
@@ -140,15 +152,64 @@ python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-
 
 ---
 
-## 6. Outputs and logging
+## 6. Per-case statistics script (`generate_case_statistics.py`)
+
+### Purpose
+- Generate normalized intensity histograms for every modality in a case.
+- Record voxel counts and percentage breakdowns for each segmentation label.
+
+### Example command
+```powershell
+python scripts/generate_case_statistics.py --root training_data_additional --output-dir outputs/stats --max-cases 10
+```
+
+Outputs include:
+- `outputs/stats/CASE/CASE_hist.png` – multi-panel histogram figure.
+- `outputs/stats/case_statistics.json` – consolidated table of label volumes.
+
+Tune `--bins`, `--lower-percentile`, and `--upper-percentile` to control normalization when
+dealing with outliers.
+
+## 7. GIF generator (`generate_case_gifs.py`)
+
+### Purpose
+- Assemble slice-by-slice animations for quick QC or sharing with clinicians.
+- Optional segmentation overlays with configurable stride and playback speed.
+
+### Example command
+```powershell
+python scripts/generate_case_gifs.py --root training_data_additional --output-dir outputs/gifs --modality t2f --axis axial --step 4 --overlay --max-cases 3
+```
+
+GIFs are written to `outputs/gifs/CASE_modality_axis.gif`. Use `--case CASE-ID` to target
+a single subject, `--step` to skip slices, and `--fps` to control playback speed.
+
+## 8. Interactive notebook (`notebooks/brats_exploration.ipynb`)
+
+### Highlights
+- Geometry audit: tabular shape/spacing/orientation summaries.
+- Label analytics: dataset-wide label ratios and per-case tables.
+- Slice viewers: modality/axis selectors with interactive mask overlays.
+- Histogram explorer: per-case intensity and label-volume plots.
+- GIF pipeline helper: ready-to-run functions mirroring the batch script.
+
+Launch with:
+
+```powershell
+jupyter notebook notebooks/brats_exploration.ipynb
+```
+
+Ensure `ipywidgets` is installed (included in `requirements.txt`). When running remotely, set
+`matplotlib` to a non-interactive backend if needed.
+
+## 9. Outputs and logging
 
 - All generated figures/JSON land in `outputs/` (ignored by git). Organize subfolders
   (e.g., `outputs/figures`, `outputs/reports`) as needed.
 - Scripts print concise progress text; redirect to log files if running in batch mode.
 
----
 
-## 7. Troubleshooting
+## 10. Troubleshooting
 
 | Issue | Resolution |
 |-------|------------|
@@ -157,9 +218,8 @@ python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-
 | Matplotlib backend errors | When running headless (e.g., remote server), omit `--show` and rely on `--output`. |
 | Memory limits | Scripts load one volume at a time; if memory issues occur, ensure 64-bit Python and sufficient RAM. |
 
----
 
-## 8. Collaboration workflow
+## 11. Collaboration workflow
 
 1. Pull the repository (without data) from GitHub.
 2. Obtain imaging data from the secure server and place them in the ignored folders.
@@ -167,9 +227,8 @@ python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-
 4. Generate visualization figures for QC or presentations.
 5. Commit only code/docs; outputs and raw data stay local.
 
----
 
-## 9. Upcoming enhancements (roadmap)
+## 12. Upcoming enhancements (roadmap)
 
 - **Interactive notebooks:** Build Jupyter notebooks showcasing end-to-end exploratory
   analysis (dynamic slice sliders, segmentation overlays, interactive histograms).

@@ -1,6 +1,6 @@
 # BraTS Post-treatment Visualization Toolkit
 
-Utilities for exploring the BraTS 2025 post-treatment glioma dataset located in
+Utilities for exploring the BraTS 2024 post-treatment glioma dataset located in
 `training_data_additional/`.
 
 ## Setup
@@ -54,6 +54,32 @@ python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-
 
 Outputs are saved under the provided `--output` path; if omitted, the figure is
 shown interactively.
+
+## Per-case histogram statistics
+
+Produce modality histograms and segmentation volume tables for each subject:
+
+```powershell
+python scripts/generate_case_statistics.py --root training_data_additional --output-dir outputs/stats --max-cases 5
+```
+
+Each case gets a histogram PNG plus an entry in `case_statistics.json` with voxel counts
+and percentages per label.
+
+## Batch GIF generation
+
+Create slice-by-slice animations for review meetings (segmentation overlay optional):
+
+```powershell
+python scripts/generate_case_gifs.py --root training_data_additional --output-dir outputs/gifs --modality t2f --axis axial --step 3 --overlay --max-cases 2
+```
+
+GIFs are written to `outputs/gifs/CASE_modality_axis.gif`.
+
+## Interactive notebook
+
+Launch Jupyter and open `notebooks/brats_exploration.ipynb` for widgets that enable slice
+browsing, orientation checks, histogram analytics, and GIF generation helpers.
 
 ## Outputs directory
 
