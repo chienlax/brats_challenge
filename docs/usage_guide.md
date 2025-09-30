@@ -10,7 +10,15 @@ analysis/visualization workflow that ships with this repository.
 - [1. Quick-start checklist](#1-quick-start-checklist)
 - [2. Repository layout](#2-repository-layout)
 - [3. Prerequisites & environment setup](#3-prerequisites--environment-setup)
-- [4. Data acquisition & directory hygiene](#4-data-acquisition--directory-hygiene)
+- [4. Data ac| `MemoryError` during histograms | Extremely large simultaneous plots. | Reduce `--max-cases`, close other apps, or process cases sequentially. |
+| GIF generation is slow | Rendering hundreds of frames at high DPI. | Increase `--step`, lower `--dpi`, or skip overlays. |
+| Orientation legend unexpected | Affine not canonical (rare). | Check `aggregate.orientation_counts` and confirm the case's affine in nibabel; update `aff2axcodes` logic if needed. |
+
+Need more help? See Section 12 for contact details.
+
+---
+
+## 10. Collaboration workflow& directory hygiene](#4-data-acquisition--directory-hygiene)
 - [5. Core workflow overview](#5-core-workflow-overview)
 - [6. Command-line toolkit reference](#6-command-line-toolkit-reference)
   - [6.1 Dataset summary (`summarize_brats_dataset.py`)](#61-dataset-summary-summarize_brats_datasetpy)
@@ -19,13 +27,12 @@ analysis/visualization workflow that ships with this repository.
   - [6.4 GIF generator (`generate_case_gifs.py`)](#64-gif-generator-generate_case_gifspy)
   - [6.5 Volume pre-renderer (`precompute_volume_visuals.py`)](#65-volume-pre-renderer-precompute_volume_visualspy)
   - [6.6 Interactive volume inspector (`launch_volume_inspector.py`)](#66-interactive-volume-inspector-launch_volume_inspectorpy)
-- [7. Interactive notebook (`notebooks/brats_exploration.ipynb`)](#7-interactive-notebook-notebooksbrats_explorationipynb)
-- [8. Outputs & artifact management](#8-outputs--artifact-management)
-- [9. Automation & batching tips](#9-automation--batching-tips)
-- [10. Troubleshooting & FAQ](#10-troubleshooting--faq)
-- [11. Collaboration workflow](#11-collaboration-workflow)
-- [12. Roadmap & contribution guardrails](#12-roadmap--contribution-guardrails)
-- [13. Related resources & contacts](#13-related-resources--contacts)
+- [7. Outputs & artifact management](#7-outputs--artifact-management)
+- [8. Automation & batching tips](#8-automation--batching-tips)
+- [9. Troubleshooting & FAQ](#9-troubleshooting--faq)
+- [10. Collaboration workflow](#10-collaboration-workflow)
+- [11. Roadmap & contribution guardrails](#11-roadmap--contribution-guardrails)
+- [12. Related resources & contacts](#12-related-resources--contacts)
 
 ---
 
@@ -33,10 +40,10 @@ analysis/visualization workflow that ships with this repository.
 
 1. **Clone the repo** (code only; data are synced separately).
 2. **Create & activate** a virtual environment (see Section 3).
-3. **Install dependencies** from `requirements.txt` (matplotlib, nibabel, numpy, pandas, imageio, ipywidgets).
+3. **Install dependencies** from `requirements.txt` (matplotlib, nibabel, numpy, pandas, imageio, dash, plotly).
 4. **Mirror the imaging data** into `training_data/`, `training_data_additional/`, and `validation_data/`.
 5. **Smoke test the setup** by running the dataset summary script and reviewing `outputs/dataset_stats.json`.
-6. **Generate visuals** (panels/GIFs/histograms) or explore interactively via the notebook.
+6. **Generate visuals** (panels/GIFs/histograms) or explore interactively via the volume inspector web app.
 7. **Commit only code & docs**—outputs and raw data stay local per policy.
 
 Need a deeper dive? Read on for step-by-step instructions, advanced flags, and maintenance tips.
@@ -53,13 +60,14 @@ brats_challenge/
 │   ├── usage_guide.md             # ← you are here
 │   ├── data_overview.md           # Aggregated dataset statistics & context
 │   └── medical_report.md          # Clinical notes (if provided)
-├── notebooks/
-│   └── brats_exploration.ipynb    # Interactive exploration playground
 ├── scripts/                       # Command-line utilities
 │   ├── summarize_brats_dataset.py
 │   ├── visualize_brats.py
 │   ├── generate_case_statistics.py
 │   └── generate_case_gifs.py
+├── apps/                          # Interactive Dash application
+│   ├── common/                    # Shared volume utilities
+│   └── volume_inspector/          # Web-based slice viewer
 ├── outputs/                       # Generated figures/reports (git-ignored)
 ├── training_data/                 # Optional baseline dataset (git-ignored)
 ├── training_data_additional/      # BraTS post-treatment releases (git-ignored)
@@ -111,10 +119,9 @@ Verify the install:
 pip list | Select-String nibabel
 ```
 
-### 3.3 IDE & notebook add-ons
+### 3.3 IDE setup
 
-- Install the **Jupyter** and **Python** extensions in VS Code for best notebook support.
-- `ipywidgets` is bundled already; if widget rendering fails, reinstall via `pip install ipywidgets --force-reinstall`.
+- Install the **Python** extension in VS Code for best development support.
 - For remote/headless servers, set `MPLBACKEND=Agg` or use `--no-overlay`/`--output` flags to avoid GUI requirements.
 
 ---
@@ -147,7 +154,6 @@ pip list | Select-String nibabel
 | 3 | Publication figures | `visualize_brats.py` | High-res modality panels or orthogonal views |
 | 4 | Animation reels | `generate_case_gifs.py` | GIFs sweeping through slices |
 | 5 | Interactive inspection | `launch_volume_inspector.py` | Dash web app for multi-modal slice browsing with overlays |
-| 6 | Interactive exploration | `brats_exploration.ipynb` | Widgets for slicing, analytics, and quick prototyping |
 
 Follow the steps sequentially for onboarding or run them à la carte depending on your task.
 
@@ -395,35 +401,7 @@ The server binds to `http://127.0.0.1:8050` by default and auto-indexes `trainin
 
 ---
 
-## 7. Interactive notebook (`notebooks/brats_exploration.ipynb`)
-
-### Highlights
-
-- **Geometry audit:** Table of shapes, voxel spacing, and orientation; flags inconsistencies.
-- **Label analytics:** Aggregated label ratios plus per-case breakdowns mirroring the summary script.
-- **Slice viewers:** ipywidgets controls for modality, axis, slice position, and overlay toggles.
-- **Histogram explorer:** On-demand plots per case with percentile sliders.
-- **GIF helper cells:** Functions that wrap the GIF script for ad-hoc experimentation.
-
-### Launching locally
-
-```powershell
-jupyter notebook notebooks/brats_exploration.ipynb
-```
-
-- Ensure the virtual environment is active before launching.
-- For VS Code users, open the notebook directly and select the `.venv` interpreter.
-- When running on a server without GUI forwarding, run `jupyter notebook --no-browser --port 8888` and port-forward via SSH.
-
-### Notebook etiquette
-
-- Keep outputs trimmed before committing (Clear All Outputs in VS Code).
-- Parameterize paths at the top of the notebook so others can switch datasets easily.
-- Use the notebook to prototype changes, then upstream stable logic into the scripts.
-
----
-
-## 8. Outputs & artifact management
+## 7. Outputs & artifact management
 
 | Location | Contents | Notes |
 |----------|----------|-------|
@@ -438,7 +416,7 @@ jupyter notebook notebooks/brats_exploration.ipynb
 
 ---
 
-## 9. Automation & batching tips
+## 8. Automation & batching tips
 
 - **Parallelization:** Scripts are single-threaded by design. For large batches, run multiple PowerShell windows or use GNU Parallel (Linux) with care to avoid saturating disk IO.
 - **Logging:** Append `| Tee-Object -FilePath logs/<name>.log` in PowerShell or `2>&1 | tee logs/<name>.log` in Bash to capture console output.
@@ -447,7 +425,7 @@ jupyter notebook notebooks/brats_exploration.ipynb
 
 ---
 
-## 10. Troubleshooting & FAQ
+## 9. Troubleshooting & FAQ
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
@@ -478,7 +456,7 @@ Need more help? See Section 13 for contact details.
 
 ---
 
-## 12. Roadmap & contribution guardrails
+## 11. Roadmap & contribution guardrails
 
 - **Interactive dashboards:** Feed `dataset_stats.json` and `case_statistics.json` into Streamlit/Panel dashboards for live QC.
 - **Extended analytics:** Explore percentile-based z-score normalization, longitudinal case tracking, and volume trend charts.
@@ -493,7 +471,7 @@ Contribution tips:
 
 ---
 
-## 13. Related resources & contacts
+## 12. Related resources & contacts
 
 - **Docs:**
   - `docs/data_overview.md` — dataset statistics snapshot (keep refreshed).

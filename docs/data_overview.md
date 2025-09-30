@@ -1,6 +1,11 @@
 # BraTS Post-treatment Dataset Overview
 
-This document consolidates the essential facts about the BraTS 2025 post-treatment glioma dataset hosted in this repository, using the analytics scripts and notebook delivered alongside the data. Share it with anyone who needs a one-stop reference on data geometry, modality coverage, label semantics, and available tooling.
+This document consoliPercentages are computed relative to all tumor-class 2. **Case-level triage**
+   - Use `generate_case_statistics.py --case CASE_ID` to visualize histograms and label percentages.
+   - Open the volume inspector web app for manual slice checks around suspicious volumes.
+   - Produce GIFs focusing on `t2f` or `t1c` with overlays for quick stakeholder review.ls (labels 1–4). These numbers are reproduced in `outputs/dataset_stats.json`.
+
+Color legend (aligned with the official BraTS guidance and used across visualization and GIF scripts):es the essential facts about the BraTS 2025 post-treatment glioma dataset hosted in this repository, using the analytics scripts delivered alongside the data. Share it with anyone who needs a one-stop reference on data geometry, modality coverage, label semantics, and available tooling.
 
 ---
 
@@ -15,7 +20,7 @@ This document consolidates the essential facts about the BraTS 2025 post-treatme
 1. Install the Python environment (`pip install -r requirements.txt`).
 2. Run the dataset summary script to verify geometry/labels.
 3. Generate optional per-case histograms and GIFs for deeper QA.
-4. Explore interactively via the notebook (slice viewer, histograms, GIF helpers).
+4. Explore interactively via the volume inspector web app.
 
 ---
 
@@ -99,15 +104,10 @@ Color legend (aligned with the official BraTS guidance and used across visualiza
   2. Share resulting files (`CASE_modality_axis.gif`) for radiology review or QC.
 - **Options:** `--case` to isolate a subject; `--step` to adjust sampling stride; `--fps` for playback speed; `--overlay` toggle.
 
-### `notebooks/brats_exploration.ipynb`
-- **Modules covered:**
-  - Metadata table (shapes, spacing, orientation).
-  - Orientation & dtype frequency charts.
-  - Label analytics table + per-case statistics.
-  - Interactive slice viewer with modality/axis widgets.
-  - Histogram plots and label bar charts per case.
-  - GIF helper routines mirroring the batch script for ad-hoc experiments.
-- **Launch:** `jupyter notebook notebooks/brats_exploration.ipynb` (ensure `ipywidgets` is installed).
+### `scripts/launch_volume_inspector.py`
+- **Purpose:** Launch interactive Dash web application for real-time slice browsing across modalities.
+- **Launch:** `python scripts/launch_volume_inspector.py --open-browser`
+- **Features:** Dataset/case dropdowns, modality selector, axis slider with segmentation overlays, orthogonal views, display quality toggle (Standard/High/Best scaling), and PNG export.
 
 ---
 
@@ -125,7 +125,7 @@ Color legend (aligned with the official BraTS guidance and used across visualiza
 
 3. **Presentation prep**
    - Export high-resolution figures via `visualize_brats.py`.
-   - Combine GIF outputs or notebook snapshots into slide decks.
+   - Combine GIF outputs or web app screenshots into slide decks.
 
 ---
 
@@ -134,7 +134,7 @@ Color legend (aligned with the official BraTS guidance and used across visualiza
 - Automate dashboard ingestion of `dataset_stats.json` and `case_statistics.json` for continuous monitoring.
 - Integrate class balancing insights (e.g., under-representation of enhancing tumor) into model training strategies.
 - Extend GIF tooling to MP4 exports and add side-by-side modality playback.
-- Enrich the notebook with interactive histogram brushing and tumor volume trend charts.
+- Enhance the volume inspector with histogram brushing and tumor volume trend charts.
 
 ---
 

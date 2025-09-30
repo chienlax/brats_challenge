@@ -1,6 +1,6 @@
 # Tumor Annotation
 
-Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩa chính xác bốn (4) lớp nhãn được sử dụng trong bộ dữ liệu BraTS 2024.
+Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩa chính xác bốn labels được sử dụng trong bộ dữ liệu BraTS 2024.
 
 ## 1. Nguyên lý các Chuỗi xung MRI (MRI Sequences)
 

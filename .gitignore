@@ -19,6 +19,9 @@ env/
 .idea/
 *.code-workspace
 
+# GitHub configuration (agent instructions, workflows)
+.github/
+
 # Operating system files
 .DS_Store
 Thumbs.db

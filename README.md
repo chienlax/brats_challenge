@@ -87,11 +87,6 @@ Use the display quality toggle to jump from Standard to High (2×) or Best (4×)
 Flip the view mode to “All modalities” to inspect T1c/T1n/T2w/T2f slices side-by-side while keeping overlays intact.
 The built-in legend reminds you of segmentation colors: blue (Enhancing Tumor), red (Non-Enhancing Tumor), green (Peritumoral Edema/SNFH), and yellow (Resection Cavity).
 
-## Interactive notebook
-
-Launch Jupyter and open `notebooks/brats_exploration.ipynb` for widgets that enable slice
-browsing, orientation checks, histogram analytics, and GIF generation helpers.
-
 ## Outputs directory
 
 Figures and JSON reports are written to the `outputs/` folder (created on demand).

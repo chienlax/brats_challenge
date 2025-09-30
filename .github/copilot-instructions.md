@@ -2,6 +2,7 @@
 
 - **Project snapshot:** Neuroimaging toolkit in Python 3.10+ for BraTS post-treatment cohorts; primary code lives in `apps/` (interactive Dash app) and `scripts/` (batch utilities).
 - **Environment:** Activate `.venv` then `pip install -r requirements.txt`; stick to pinned versions in `requirements.txt` and avoid unpinned upgrades.
+- **Git hygiene:** `.github/` is gitignored to keep agent instructions local; commit code/docs only—never data (`training_data*`), outputs, or media exports.
 - **Core data layout:** Cases live under `training_data*/BraTS-GLI-*/` with files named `CASE-{t1c,t1n,t2f,t2w,seg}.nii.gz`; scripts assume this convention and raise fast if a modality is missing.
 - **Shared volume utilities:** Use `apps/common/volume_utils.py` for loading, normalization, slice selection, segmentation colors, and caching; reusing these avoids drift between CLI tools and the Dash app.
 - **Dash app architecture:** `apps/volume_inspector/app.py` wires `VolumeRepository` from `data.py`, UI scaffolding in `layout.py`, and Plotly rendering helpers in `rendering.py`; callbacks in `callbacks.py` coordinate dropdowns, sliders, overlays, and PNG export.
@@ -11,7 +12,6 @@
 - **CLI workflows:** Batch scripts in `scripts/` share normalization rules and naming; use `summarize_brats_dataset.py` for cohort QA, `visualize_brats.py` for static panels, `generate_case_statistics.py` for histograms/JSON, `generate_case_gifs.py` for animations, and `launch_volume_inspector.py` to boot the app (adds repo root to `sys.path` automatically).
 - **Example commands:** Run summaries with `python scripts/summarize_brats_dataset.py --root training_data_additional --output outputs/dataset_stats.json`; launch the Dash UI via `python scripts/launch_volume_inspector.py --open-browser`.
 - **Testing:** Pytest covers slice prep and rendering (`tests/test_volume_utils.py`, `tests/test_rendering.py`); run `python -m pytest -q` from repo root before shipping changes that touch these areas.
-- **Notebook usage:** `notebooks/brats_exploration.ipynb` mirrors script capabilities with widgets; keep code there exploratory and upstream durable logic into `scripts/` or `apps/`.
 - **Docs:** `docs/usage_guide.md` captures canonical workflows and flag descriptions—update it when you add CLI options or new outputs.
 - **Outputs:** All generated artifacts go to `outputs/` (git-ignored); create subfolders on demand to keep large files out of the repo.
 - **Style tips:** Favor explicit `Path` objects and `np.float32` arrays for volumes; follow existing patterns for `argparse` arguments and fast failure on missing files.
