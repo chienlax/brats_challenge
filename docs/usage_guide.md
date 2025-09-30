@@ -10,15 +10,7 @@ analysis/visualization workflow that ships with this repository.
 - [1. Quick-start checklist](#1-quick-start-checklist)
 - [2. Repository layout](#2-repository-layout)
 - [3. Prerequisites & environment setup](#3-prerequisites--environment-setup)
-- [4. Data ac| `MemoryError` during histograms | Extremely large simultaneous plots. | Reduce `--max-cases`, close other apps, or process cases sequentially. |
-| GIF generation is slow | Rendering hundreds of frames at high DPI. | Increase `--step`, lower `--dpi`, or skip overlays. |
-| Orientation legend unexpected | Affine not canonical (rare). | Check `aggregate.orientation_counts` and confirm the case's affine in nibabel; update `aff2axcodes` logic if needed. |
-
-Need more help? See Section 12 for contact details.
-
----
-
-## 10. Collaboration workflow& directory hygiene](#4-data-acquisition--directory-hygiene)
+- [4. Data acquisition & directory hygiene](#4-data-acquisition--directory-hygiene)
 - [5. Core workflow overview](#5-core-workflow-overview)
 - [6. Command-line toolkit reference](#6-command-line-toolkit-reference)
   - [6.1 Dataset summary (`summarize_brats_dataset.py`)](#61-dataset-summary-summarize_brats_datasetpy)
@@ -83,7 +75,7 @@ brats_challenge/
 
 ## 3. Prerequisites & environment setup
 
-- **Python:** 3.10+ (tested with CPython 3.11). Use the same interpreter across scripts and the notebook.
+- **Python:** 3.10+ (tested with CPython 3.11). Use the same interpreter across scripts.
 - **OS:** Windows, macOS, and modern Linux distros are supported; examples in this guide use Windows PowerShell.
 - **Disk:** ~50 GB for datasets plus room for generated artifacts.
 - **Optional:** GPU is *not* required. All utilities run comfortably on CPU-only laptops.
@@ -442,7 +434,7 @@ Need more help? See Section 13 for contact details.
 
 ---
 
-## 11. Collaboration workflow
+## 10. Collaboration workflow
 
 1. **Sync code** from GitHub (`git pull origin main`).
 2. **Sync data** from the secure share (rsync/robocopy depending on platform).
@@ -479,9 +471,3 @@ Contribution tips:
 - **External references:**
   - BraTS challenge hub: <https://www.synapse.org/#!Synapse:syn51156910/wiki/>
   - NiBabel orientation primer: <https://nipy.org/nibabel/orientation.html>
-
-- **Team contacts:**
-  - *Primary maintainer:* Assign at project kickoff (update here once defined).
-  - *Shared channel:* `#brats-post-tx` on Slack for Q&A and status updates.
-
-Keep iterating on this guide—thorough documentation keeps onboarding frictionless and lets the team focus on science.
