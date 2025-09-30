@@ -12,80 +12,78 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Dataset summary
+## Statistics Inspector
 
-Generate global statistics and (optionally) save them to JSON:
+Interactive web application for analyzing BraTS case and dataset statistics:
 
 ```powershell
-python scripts/summarize_brats_dataset.py --root training_data_additional --output outputs/dataset_stats.json
+python scripts/analyze_statistics.py --open-browser
 ```
 
-Key metrics include:
+**Features:**
 
-- Number of cases processed.
-- Shape / voxel-spacing consistency.
-- Intensity percentiles per modality.
-- Label frequencies across segmentation masks.
-- Modalities present / missing per case.
+- **Case Statistics Tab**: View intensity histograms and segmentation label volumes for individual cases
+- **Dataset Statistics Tab**: Analyze aggregate metrics across entire datasets (shapes, spacings, modalities, intensity summaries, label counts)
+- **Smart Caching**: Dataset statistics are pre-computed and cached in `outputs/statistics_cache/`
+- **Recompute Option**: Refresh statistics when data changes with a single click
 
-## Visualization script
+The statistics inspector replaces the previous `generate_case_statistics.py` and `summarize_brats_dataset.py` scripts with a unified browser-based interface.
 
-Render multi-modal panels or orthogonal planes with segmentation overlays:
+## Unified Visualization Tool
+
+A single comprehensive tool for all BraTS volume visualization needs with three distinct modes:
+
+### Interactive Mode (Dash Web App)
+
+Launch a browser-based app for real-time slice browsing with segmentation overlays:
 
 ```powershell
-python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-02405-100 --layout modalities --axis axial --fraction 0.55 --output outputs/BraTS-GLI-02405-100_axial.png
+python scripts/visualize_volumes.py --mode interactive --open-browser
 ```
 
-Alternative example showing orthogonal views for a single modality:
+Key features: dataset/case dropdowns, modality-aware axis slider, segmentation toggles, orthogonal previews, and one-click PNG export. Toggle between Standard, High (2×), or Best (4×) display quality. View all modalities side-by-side in grid mode.
+
+### Static Mode (Publication Figures)
+
+Generate multi-modal panels or orthogonal planes with segmentation overlays:
 
 ```powershell
-python scripts/visualize_brats.py --case-dir training_data_additional/BraTS-GLI-02405-100 --layout orthogonal --modality t1c --indices 90 110 70 --output outputs/BraTS-GLI-02405-100_orthogonal.png
+python scripts/visualize_volumes.py --mode static \
+    --case-dir training_data_additional/BraTS-GLI-02405-100 \
+    --layout modalities --axis axial --fraction 0.55 \
+    --output outputs/BraTS-GLI-02405-100_axial.png
 ```
 
-### Options
-
-- `--layout`: `modalities` (default) or `orthogonal`.
-- `--axis`: axis for `modalities` layout (`axial`, `coronal`, `sagittal`).
-- `--fraction` / `--index`: control slice location.
-- `--indices`: specify slice indices for orthogonal layout.
-- `--no-overlay`: disable segmentation overlay.
-- `--show`: open an interactive matplotlib window in addition to saving the figure.
-
-Outputs are saved under the provided `--output` path; if omitted, the figure is
-shown interactively.
-
-## Per-case histogram statistics
-
-Produce modality histograms and segmentation volume tables for each subject:
+Orthogonal views for a single modality:
 
 ```powershell
-python scripts/generate_case_statistics.py --root training_data_additional --output-dir outputs/stats --max-cases 5
+python scripts/visualize_volumes.py --mode static \
+    --case-dir training_data_additional/BraTS-GLI-02405-100 \
+    --layout orthogonal --modality t1c --indices 90 110 70 \
+    --output outputs/BraTS-GLI-02405-100_orthogonal.png
 ```
 
-Each case gets a histogram PNG plus an entry in `case_statistics.json` with voxel counts and percentages per label.
+**Options:**
+- `--layout`: `modalities` or `orthogonal`
+- `--axis`: axis for modalities layout (`axial`, `coronal`, `sagittal`)
+- `--fraction` / `--index`: control slice location
+- `--indices`: specify slice indices for orthogonal layout
+- `--no-overlay`: disable segmentation overlay
+- `--show`: open interactive matplotlib window
 
-## Batch GIF generation
+### GIF Mode (Animations)
 
-Create slice-by-slice animations for review meetings (segmentation overlay optional):
+Create slice-by-slice animations for review meetings:
 
 ```powershell
-python scripts/generate_case_gifs.py --root training_data_additional --output-dir outputs/gifs --modality t2f --axis axial --step 3 --overlay --max-cases 2
+python scripts/visualize_volumes.py --mode gif \
+    --root training_data_additional --output-dir outputs/gifs \
+    --gif-modality t2f --gif-axis axial --step 3 --overlay --max-cases 2
 ```
 
 GIFs are written to `outputs/gifs/CASE_modality_axis.gif`.
 
-## Interactive volume inspector
-
-Launch a Dash-powered browser app for real-time slice browsing and overlays:
-
-```powershell
-python scripts/launch_volume_inspector.py --open-browser
-```
-
-Key features: dataset/case dropdowns, modality-aware axis slider, segmentation toggles, orthogonal previews, and one-click PNG export of the active slice.
-Use the display quality toggle to jump from Standard to High (2×) or Best (4×) whenever you need sharper views or exports.
-Flip the view mode to “All modalities” to inspect T1c/T1n/T2w/T2f slices side-by-side while keeping overlays intact.
-The built-in legend reminds you of segmentation colors: blue (Enhancing Tumor), red (Non-Enhancing Tumor), green (Peritumoral Edema/SNFH), and yellow (Resection Cavity).
+**Note:** The previous separate scripts (`launch_volume_inspector.py`, `visualize_brats.py`, `generate_case_gifs.py`) have been consolidated into this unified tool and moved to `scripts/deprecated/`.
 
 ## Outputs directory
 
@@ -93,5 +91,5 @@ Figures and JSON reports are written to the `outputs/` folder (created on demand
 Common subdirectories include:
 
 - `outputs/gifs/` — animated slice reels.
-- `outputs/stats/` — histogram PNGs plus per-case metrics.
+- `outputs/statistics_cache/` — cached dataset-wide statistics.
 - `outputs/volumes/` — Plotly HTML viewers generated by `precompute_volume_visuals.py`.
