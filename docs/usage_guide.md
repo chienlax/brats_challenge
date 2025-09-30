@@ -111,7 +111,9 @@ pip list | Select-String dash
 
 ## 4. Data staging & QA hygiene
 
-1. **Fetch the BraTS archives** from the secure storage share (post-treatment cohort).
+1. **Fetch the BraTS archives**.
+- Additional training data: [Drive](https://drive.google.com/drive/folders/1bBs_z1IvppZqmtUYOM2iJsD-9g5ZkGKC?usp=drive_link)
+- Validation data: [Drive](https://drive.google.com/drive/folders/1uHZ_A4tNVQoLjKkYlh1kMkDJYIWMs9NN?usp=sharing)
 2. **Extract** so each case becomes `BraTS-GLI-XXXXX-YYY/` containing `*-{t1c,t1n,t2f,t2w,seg}.nii.gz` files.
 3. **Place** folders under `training_data_additional/` (primary set). Legacy cases can live in `training_data/`; validation-only drops go to `validation_data/`.
 4. **Verify counts**:
