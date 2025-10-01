@@ -1,6 +1,6 @@
 # Tumor Annotation
 
-Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩa chính xác bốn labels được sử dụng trong bộ dữ liệu BraTS 2024.
+Tài liệu này giải thích các chuỗi xung MRI cơ bản và định nghĩa chính xác 4 labels được sử dụng trong bộ dữ liệu BraTS 2024.
 
 ## 1. Nguyên lý các Chuỗi xung MRI (MRI Sequences)
 
@@ -176,7 +176,7 @@ Hình ảnh này là một "bảng tổng kết" các sai lầm kinh điển. H�
 
 **Điểm cốt lõi: "Lesion-wise" (Theo từng tổn thương)**
 Đây là một cải tiến cực kỳ quan trọng. Thay vì tính một điểm DSC chung cho toàn bộ não, họ sẽ tính điểm DSC cho **từng tổn thương riêng lẻ**.
-*   **Tại sao?** Giả sử có một khối u lớn và hai khối u tái phát nhỏ. Một mô hình "lười biást" có thể chỉ tìm thấy khối u lớn và bỏ qua hai khối u nhỏ. Nếu tính DSC chung, điểm số vẫn có thể khá cao. Nhưng với phương pháp "lesion-wise", mô hình sẽ bị 0 điểm cho hai khối u nhỏ bị bỏ lỡ, phản ánh chính xác hơn hiệu suất lâm sàng. Điều này buộc các mô hình phải có khả năng phát hiện cả những tổn thương đa ổ, đa trung tâm.
+*   **Tại sao?** Giả sử có một khối u lớn và hai khối u tái phát nhỏ. Một mô hình bias có thể chỉ tìm thấy khối u lớn và bỏ qua hai khối u nhỏ. Nếu tính DSC chung, điểm số vẫn có thể khá cao. Nhưng với phương pháp "lesion-wise", mô hình sẽ bị 0 điểm cho hai khối u nhỏ bị bỏ lỡ, phản ánh chính xác hơn hiệu suất lâm sàng. Điều này buộc các mô hình phải có khả năng phát hiện cả những tổn thương đa ổ, đa trung tâm.
 
 ---
 
