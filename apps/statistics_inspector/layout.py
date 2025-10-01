@@ -300,7 +300,14 @@ def create_dataset_statistics_display(stats: dict) -> html.Div:
 
     # Segmentation label counts
     components.append(html.H4("Segmentation Label Totals", className="mt-4 mb-3"))
-    label_counts = aggregate.get("label_counts", {})
+    label_counts_raw = aggregate.get("label_counts", {})
+    label_counts = {}
+    for key, value in label_counts_raw.items():
+        try:
+            label_key = int(key)
+        except (TypeError, ValueError):
+            continue
+        label_counts[label_key] = int(value)
     
     if label_counts:
         label_rows = []

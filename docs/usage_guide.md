@@ -74,7 +74,7 @@ The table below lists every meaningful path and its purpose. Files or folders no
 
 ```powershell
 python -m venv .venv
-\.venv\Scripts\Activate.ps1
+.\\.venv\Scripts\Activate.ps1
 python --version
 ```
 
