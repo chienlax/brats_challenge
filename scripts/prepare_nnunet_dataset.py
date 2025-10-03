@@ -24,14 +24,18 @@ LABELS = {
 }
 
 
-def discover_case_dirs(roots: Sequence[Path]) -> Sequence[Path]:
+def discover_case_dirs(roots: Sequence[Path], *, require_segmentation: bool) -> Sequence[Path]:
     cases: list[Path] = []
     for root in roots:
         if not root.exists():
             continue
         for case_dir in sorted(root.glob("BraTS-GLI-*")):
-            if case_dir.is_dir() and any(case_dir.glob("*-seg.nii.gz")):
-                cases.append(case_dir)
+            if not case_dir.is_dir():
+                continue
+            has_seg = any(case_dir.glob("*-seg.nii.gz"))
+            if require_segmentation and not has_seg:
+                continue
+            cases.append(case_dir)
     return cases
 
 
@@ -49,7 +53,7 @@ class LinkStrategy:
             shutil.copy2(src, dst)
 
 
-def write_dataset_json(dataset_root: Path, num_cases: int) -> None:
+def write_dataset_json(dataset_root: Path, *, num_train: int, num_test: int) -> None:
     dataset_description = {
         "name": "BraTSPostTx",
         "description": "BraTS post-treatment cohort converted for nnU-Net v2",
@@ -59,23 +63,30 @@ def write_dataset_json(dataset_root: Path, num_cases: int) -> None:
         "tensorImageSize": "3D",
         "channel_names": {str(idx): name for idx, (_, name) in enumerate(MODALITY_ORDER)},
         "labels": LABELS,
-        "numTraining": num_cases,
+        "numTraining": num_train,
         "file_ending": ".nii.gz",
     }
+
+    if num_test:
+        dataset_description["numTest"] = num_test
 
     dataset_json = dataset_root / "dataset.json"
     dataset_json.write_text(json.dumps(dataset_description, indent=2) + "\n")
 
 
-def convert_cases(case_dirs: Sequence[Path], dataset_root: Path) -> None:
+def convert_cases(train_dirs: Sequence[Path], test_dirs: Sequence[Path], dataset_root: Path) -> None:
     images_tr = dataset_root / "imagesTr"
     labels_tr = dataset_root / "labelsTr"
     images_tr.mkdir(parents=True, exist_ok=True)
     labels_tr.mkdir(parents=True, exist_ok=True)
 
+    images_ts = dataset_root / "imagesTs"
+    if test_dirs:
+        images_ts.mkdir(parents=True, exist_ok=True)
+
     linker = LinkStrategy(destination=dataset_root)
 
-    for case_dir in case_dirs:
+    for case_dir in train_dirs:
         case_prefix = case_dir.name
         seg_src = case_dir / f"{case_prefix}-seg.nii.gz"
         if not seg_src.exists():
@@ -93,14 +104,35 @@ def convert_cases(case_dirs: Sequence[Path], dataset_root: Path) -> None:
             dst = images_tr / f"{case_prefix}_{idx:04d}.nii.gz"
             linker.place(src, dst)
 
+    for case_dir in test_dirs:
+        case_prefix = case_dir.name
+        for idx, (suffix, _human_name) in enumerate(MODALITY_ORDER):
+            src = case_dir / f"{case_prefix}-{suffix}.nii.gz"
+            if not src.exists():
+                raise FileNotFoundError(f"Missing modality '{suffix}' for test case {case_prefix}")
+            dst = images_ts / f"{case_prefix}_{idx:04d}.nii.gz"
+            linker.place(src, dst)
+
 
 def main(argv: Iterable[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Prepare BraTS data for nnU-Net v2")
     parser.add_argument(
         "--sources",
         nargs="*",
-        default=["training_data", "training_data_additional"],
-        help="Root folders containing BraTS cases (default: training_data and training_data_additional)",
+        default=None,
+        help="DEPRECATED alias for --train-sources",
+    )
+    parser.add_argument(
+        "--train-sources",
+        nargs="*",
+        default=None,
+        help="Folders containing labeled training cases (default: training_data and training_data_additional)",
+    )
+    parser.add_argument(
+        "--test-sources",
+        nargs="*",
+        default=None,
+        help="Folders containing unlabeled test cases to populate imagesTs",
     )
     parser.add_argument(
         "--dataset-id",
@@ -114,18 +146,35 @@ def main(argv: Iterable[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    source_roots = [Path(path).resolve() for path in args.sources]
-    case_dirs = discover_case_dirs(source_roots)
-    if not case_dirs:
-        raise SystemExit("No BraTS cases were found. Check the source directories." )
+    if args.train_sources is not None:
+        train_sources = args.train_sources
+    elif args.sources is not None:
+        train_sources = args.sources
+    else:
+        train_sources = ["training_data", "training_data_additional"]
+
+    train_roots = [Path(path).resolve() for path in train_sources]
+    train_dirs = discover_case_dirs(train_roots, require_segmentation=True)
+    if not train_dirs:
+        raise SystemExit("No labeled BraTS training cases were found. Check the --train-sources directories.")
+
+    test_sources = args.test_sources or []
+    test_roots = [Path(path).resolve() for path in test_sources]
+    test_dirs = discover_case_dirs(test_roots, require_segmentation=False)
 
     dataset_root = Path(args.nnunet_raw).resolve() / args.dataset_id
     dataset_root.mkdir(parents=True, exist_ok=True)
 
-    convert_cases(case_dirs, dataset_root)
-    write_dataset_json(dataset_root, num_cases=len(case_dirs))
+    convert_cases(train_dirs, test_dirs, dataset_root)
+    write_dataset_json(dataset_root, num_train=len(train_dirs), num_test=len(test_dirs))
 
-    print(f"Prepared {len(case_dirs)} cases in {dataset_root}")
+    print(
+        "Prepared",
+        len(train_dirs),
+        "train cases",
+        f"and {len(test_dirs)} test cases" if test_dirs else "",
+        f"in {dataset_root}",
+    )
 
 
 if __name__ == "__main__":

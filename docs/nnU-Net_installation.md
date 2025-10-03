@@ -91,6 +91,24 @@ nnUNetv2_predict -h
 
 Expect warnings about missing `nnUNet_*` environment variables—that’s the next step.
 
+### Exporting architecture diagrams with hiddenlayer
+
+When `hiddenlayer` is available, every `nnUNetv2_train` run automatically writes a PDF snapshot of the compiled model to the fold output directory. After training finishes, look for:
+
+```
+outputs\nnunet\nnUNet_results\Dataset501_BraTSPostTx\<trainer>__<plans>__<configuration>\fold_<N>\network_architecture.pdf
+```
+
+Open the PDF to review encoder/decoder stages, feature widths, and skip connections.
+
+Need to regenerate the diagram without retraining? Re-run the trainer in evaluation mode so nnU-Net rebuilds the network and exports the figure:
+
+```powershell
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --val
+```
+
+`--val` performs validation only; it’s fast and recreates `network_architecture.pdf` if it was missing. For deeper customisations you can load the trained checkpoint in your own Python session and call `hiddenlayer.build_graph` on the instantiated nnU-Net network—refer to the hiddenlayer documentation for advanced usage.
+
 ---
 
 ## 6. Configure nnU-Net storage directories
@@ -132,7 +150,8 @@ python scripts\prepare_nnunet_dataset.py
 ```
 
 Flags you can override:
-- `--sources`: additional folders to scan for `BraTS-GLI-*` cases.
+- `--train-sources`: labeled cases for `imagesTr/labelsTr` (defaults to `training_data` and `training_data_additional`).
+- `--test-sources`: unlabeled cases that should populate `imagesTs` (useful when you keep a held-out evaluation set, e.g. `--test-sources training_data_additional`).
 - `--dataset-id`: name of the dataset folder inside `nnUNet_raw`.
 - `--nnunet-raw`: alternate raw-data root.
 
@@ -144,6 +163,7 @@ outputs\nnunet\nnUNet_raw\Dataset501_BraTSPostTx\
 	├─ imagesTr\BraTS-GLI-02405-100_0000.nii.gz
 	├─ ...
 	└─ labelsTr\BraTS-GLI-02405-100.nii.gz
+	└─ imagesTs\BraTS-GLI-02417-101_0000.nii.gz  (if --test-sources was provided)
 ```
 
 ---
