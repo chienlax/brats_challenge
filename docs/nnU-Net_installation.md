@@ -99,6 +99,14 @@ When `hiddenlayer` is available, every `nnUNetv2_train` run automatically writes
 outputs\nnunet\nnUNet_results\Dataset501_BraTSPostTx\<trainer>__<plans>__<configuration>\fold_<N>\network_architecture.pdf
 ```
 
+**PyTorch 2.4+ compatibility note:** hiddenlayer 0.3.x still references the private
+`torch.onnx._optimize_trace` helper, which PyTorch removed. This repository ships a
+`sitecustomize.py` compatibility shim that silently reintroduces the missing
+attribute whenever you launch nnU-Net commands from the project root. If you run
+training from a different working directory, make sure the repository is on your
+`PYTHONPATH` or apply a similar patch in your environment so the diagrams can be
+rendered.
+
 Open the PDF to review encoder/decoder stages, feature widths, and skip connections.
 
 Need to regenerate the diagram without retraining? Re-run the trainer in evaluation mode so nnU-Net rebuilds the network and exports the figure:
@@ -189,6 +197,7 @@ nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz
 nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 1 --npz
 ...
 nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 4 --npz
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz
 ```
 
 Repeat for `2d` (and `3d_lowres` if the planner generated it). Checkpoints and logs appear under `outputs\nnunet\nnUNet_results`.
