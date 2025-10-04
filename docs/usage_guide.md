@@ -15,7 +15,8 @@ Authoritative instructions for setting up the environment, staging BraTS post-tr
 - [5. Workflows & CLI tools](#5-workflows--cli-tools)
 	- [5.1 Statistics inspector (`scripts/analyze_statistics.py`)](#51-statistics-inspector-scriptsanalyze_statisticspy)
 	- [5.2 Visualization suite (`scripts/visualize_volumes.py`)](#52-visualization-suite-scriptsvisualize_volumespy)
-	- [5.3 Legacy scripts (`scripts/deprecated/`)](#53-legacy-scripts-scriptsdeprecated)
+	- [5.3 Lesion-wise metrics (`scripts/compute_brats_lesion_metrics.py`)](#53-lesion-wise-metrics-scriptscompute_brats_lesion_metricspy)
+	- [5.4 Legacy scripts (`scripts/deprecated/`)](#54-legacy-scripts-scriptsdeprecated)
 - [6. Dash app internals](#6-dash-app-internals)
 - [7. Outputs, caches, and storage](#7-outputs-caches-and-storage)
 - [8. Automation & batching patterns](#8-automation--batching-patterns)
@@ -258,7 +259,40 @@ python scripts/visualize_volumes.py --mode gif `
 
 Outputs are named `outputs/gifs/<CASE>_<MODALITY>_<AXIS>.gif`. Expect 20–100 MB files depending on stride and DPI.
 
-### 5.3 Legacy scripts (`scripts/deprecated/`)
+### 5.3 Lesion-wise metrics (`scripts/compute_brats_lesion_metrics.py`)
+
+This standalone CLI mirrors the official BraTS 2024 evaluation. It scans a folder of
+ground-truth segmentations and a folder of model predictions, matches lesions using
+26-connectivity, and reports lesion-wise Dice / 95% Hausdorff Distance for the core
+sub-regions (ET, NETC, SNFH, RC) plus the aggregate Tumor Core (TC) and Whole Tumor (WT).
+
+```powershell
+python scripts/compute_brats_lesion_metrics.py `
+	training_data_additional `
+	outputs/nnunet/preds_fold0 `
+	--output outputs/reports/lesion_metrics.json `
+	--pretty
+```
+
+| Flag | Purpose |
+|------|---------|
+| `ground_truth` | Positional argument – directory housing reference segmentations. Files must end with `.nii.gz`. |
+| `predictions` | Positional argument – directory with model predictions. Names must mirror the ground truth (e.g., `BraTS-…-seg.nii.gz` or `BraTS-….nii.gz`). |
+| `--output PATH` | Destination JSON (directories will be created automatically). |
+| `--pretty` | Indents JSON for readability (default is minified). |
+| `--labels` | Optional override for foreground labels (default `1 2 3 4`). |
+| `--omit-aggregates` | Skip Tumor Core (TC) and Whole Tumor (WT) summaries, reporting only per-label metrics. |
+
+The JSON payload contains per-case metrics, lesion-level breakdown tables, and cohort
+summary statistics (mean/median/min/max/std). Missed or spurious detections are
+penalised with Dice = 0 and HD95 equal to the volume diagonal to approximate the
+challenge scoring rules. Use the lesion tables to audit which component(s) failed.
+
+> **Tip:** Prefer `scripts/run_full_evaluation.py` when you already plan to call
+> `nnUNetv2_evaluate_simple`; it orchestrates the nnU-Net CLI and this lesion-wise
+> scorer in one step and stores all JSON artifacts alongside each other.
+
+### 5.4 Legacy scripts (`scripts/deprecated/`)
 
 Older commands (`launch_volume_inspector.py`, `visualize_brats.py`, `generate_case_gifs.py`, `generate_case_statistics.py`, `summarize_brats_dataset.py`) are preserved for historical reference in `scripts/deprecated/README.md`. They are **unsupported**; new workflows should use the unified tools above.
 

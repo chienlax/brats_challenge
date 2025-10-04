@@ -1,9 +1,11 @@
 matplotlib==3.10.6
 nibabel==5.3.2
-numpy==2.3.3
+numpy==2.2.6
+scipy==1.14.1
 ipywidgets==8.1.5
 pandas==2.2.3
 imageio==2.36.0
 plotly==5.24.1
 dash==2.17.1
 dash-bootstrap-components==1.6.0
+pytest==8.3.5

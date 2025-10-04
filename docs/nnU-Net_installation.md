@@ -151,6 +151,7 @@ nnU-Net expects three folders. This repo keeps them under `outputs/nnunet/`.
 New-Item -ItemType Directory -Force outputs\nnunet\nnUNet_raw | Out-Null
 New-Item -ItemType Directory -Force outputs\nnunet\nnUNet_preprocessed | Out-Null
 New-Item -ItemType Directory -Force outputs\nnunet\nnUNet_results | Out-Null
+New-Item -ItemType Directory -Force outputs\nnunet\reports\metrics | Out-Null
 
 setx nnUNet_raw "${PWD}\outputs\nnunet\nnUNet_raw"
 setx nnUNet_preprocessed "${PWD}\outputs\nnunet\nnUNet_preprocessed"
@@ -257,8 +258,7 @@ nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 1 --npz
 nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 4 --npz
 nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz
 nnUNetv2_train Dataset501_BraTSPostTx 2d all --npz
-nnUNetv2_train Dataset501_BraTSPostTx 2d all --npz --enable-mixed-precision
-```
+nnUNetv2_train Dataset501_BraTSPostTx 2d all --npz
 
 Repeat for `2d` (and `3d_lowres` if the planner generated it). Checkpoints and logs appear under `outputs\nnunet\nnUNet_results`.
 
@@ -268,12 +268,25 @@ Optional: adopt the new residual encoder presets (see [resenc_presets.md](https:
 
 ## 10. Export architecture diagrams
 
+(use .venv)
+
 Capture a static overview of the trained configuration so future runs can review the layer layout without rerunning training. The `visualize_architecture.py` helper consumes the generated `plans.json` and saves both overview and detailed diagrams:
 
 ```powershell
 $plans = Join-Path $env:nnUNet_preprocessed 'Dataset501_BraTSPostTx\plans.json'
 python scripts\visualize_architecture.py $plans --config 3d_fullres --output outputs\nnunet\reports\architecture\3d_fullres_overview.png --detailed-output outputs\nnunet\reports\architecture\3d_fullres_detailed.png
 ```
+
+```powershell
+$plans = Join-Path $env:nnUNet_preprocessed 'Dataset501_BraTSPostTx\plans.json'
+python scripts\visualize_architecture.py $plans --config 2d --output outputs\nnunet\reports\architecture\2d_overview.png --detailed-output outputs\nnunet\reports\architecture\2d_detailed.png
+```
+
+- The helper now auto-resolves `plans.json` straight from `nnUNet_results` if the
+    dataset folder in `nnUNet_preprocessed` does not contain a copy. Passing the
+    historical path (as above) still works; you will see a console message pointing
+    to the resolved file under the trainer directory.
+
 
 - Swap `3d_fullres` for any other configuration you trained (for example `2d`).
 - Omit `--output` to open the plot interactively, or add `--vector-output`/`--detailed-vector-output` to emit `.svg` assets alongside the PNGs.
@@ -290,6 +303,27 @@ Once training completes, run inference on held-out volumes:
 nnUNetv2_predict -i <input_folder> -o <output_folder> -d 501 -c 3d_fullres -f all --device cuda
 ```
 
+Eg:
+```powershell
+nnUNetv2_predict `
+    -i outputs\nnunet\nnUNet_raw\Dataset501_BraTSPostTx\imagesTs `
+    -o outputs\nnunet\predictions\Dataset501_BraTSPostTx\2d `
+    -d 501 `
+    -c 2d `
+    -f all `
+    -device cuda
+```
+
+```
+nnUNetv2_predict `
+    -i outputs\nnunet\nnUNet_raw\Dataset501_BraTSPostTx\imagesTs `
+    -o outputs\nnunet\predictions\Dataset501_BraTSPostTx\3d_fullres `
+    -d 501 `
+    -c 3d_fullres `
+    -f all `
+    -device cuda
+```
+
 Make sure input volumes follow the same naming scheme as training cases (`CASE_0000.nii.gz`, etc.).
 
 ---
@@ -300,6 +334,16 @@ Score predictions directly from the exported masks to validate your pipeline end
 
 ```powershell
 nnUNetv2_evaluate -i <prediction_folder> -l <ground_truth_folder>
+```
+
+Eg:
+
+```powershell
+nnUNetv2_evaluate_simple `
+    outputs\nnunet\nnUNet_raw\Dataset501_BraTSPostTx\labelsTs `
+    outputs\nnunet\predictions\Dataset501_BraTSPostTx\2d `
+    -o outputs\nnunet\reports\metrics\2d_metrics.json `
+    -l 1 2 3 4
 ```
 
 - `<prediction_folder>` is the directory produced by `nnUNetv2_predict` (filenames must match the original case IDs).
@@ -314,6 +358,36 @@ nnUNetv2_evaluate -d Dataset501_BraTSPostTx -c 3d_fullres -f all --results outpu
 ```
 
 Run `nnUNetv2_evaluate -h` on the target machine to review the full flag list—helpful when you need to disable post-processing, restrict labels, or mirror the official nnU-Net cross-validation reports.
+
+### 12.1 One-step evaluation bundle
+
+When you want the standard nnU-Net metrics and the BraTS lesion-wise report in a
+single pass, use the orchestration helper shipped with this repository:
+
+```powershell
+python scripts/run_full_evaluation.py `
+    outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
+    outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres `
+    --output-dir outputs/nnunet/reports/metrics/3d_fullres
+```
+
+```powershell
+python scripts/run_full_evaluation.py `
+    outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
+    outputs/nnunet/predictions/Dataset501_BraTSPostTx/2d `
+    --output-dir outputs/nnunet/reports/metrics/2d
+```
+
+`run_full_evaluation.py` will (1) call `nnUNetv2_evaluate_simple` (unless you pass
+`--skip-nnunet`) and (2) run the BraTS lesion-wise scorer. The command writes three
+JSON files into the requested `--output-dir`:
+
+- `nnunet_metrics.json` – the raw nnU-Net evaluation output
+- `lesion_metrics.json` – lesion-wise Dice / HD95 tables and aggregates
+- `full_metrics.json` – combined manifest referencing both reports and the source folders
+
+Use `--omit-aggregates` to hide Tumor Core and Whole Tumor rows or point
+`--labels` to a different foreground set when benchmarking alternative label maps.
 
 ---
 

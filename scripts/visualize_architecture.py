@@ -4,8 +4,9 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -25,6 +26,114 @@ def load_plans(plans_path: Path) -> Dict[str, Any]:
         raise FileNotFoundError(f"Plans file not found: {plans_path}")
     with plans_path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _candidate_results_roots() -> List[Path]:
+    roots: List[Path] = []
+    env_root = os.environ.get("nnUNet_results")
+    if env_root:
+        roots.append(Path(env_root))
+    repo_root = Path("outputs/nnunet/nnUNet_results")
+    roots.append(repo_root)
+    return [root.resolve() for root in roots if root.exists()]
+
+
+def _score_candidate(
+    candidate: Path,
+    dataset_hint: str | None,
+    config_hint: str | None,
+) -> Tuple[int, float, int]:
+    score = 0
+    path_lower = candidate.as_posix().lower()
+    if dataset_hint and dataset_hint.lower() in path_lower:
+        score += 2
+    if config_hint:
+        config_lower = config_hint.lower()
+        if f"__{config_lower}" in path_lower:
+            score += 4
+        elif config_lower in path_lower:
+            score += 3
+    try:
+        mtime = candidate.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    # Prefer shallower paths when scores tie (fewer parents)
+    depth = len(candidate.parents)
+    return score, mtime, -depth
+
+
+def resolve_plans_path(plans_arg: Path, configuration: str | None) -> Path:
+    """Resolve the most likely plans.json path given a user argument."""
+
+    expanded = plans_arg.expanduser().resolve()
+    if expanded.is_file():
+        return expanded
+
+    if expanded.is_dir():
+        direct_candidate = expanded / "plans.json"
+        if direct_candidate.exists():
+            return direct_candidate
+
+    if expanded.suffix != ".json" and expanded.exists():
+        json_candidate = expanded / "plans.json"
+        if json_candidate.exists():
+            return json_candidate
+
+    if expanded.suffix == ".json":
+        parent_candidate = expanded.parent / "plans.json"
+        if parent_candidate.exists():
+            return parent_candidate
+
+    dataset_hint: str | None = None
+    if expanded.name == "plans.json":
+        dataset_hint = expanded.parent.name if expanded.parent != expanded else None
+    elif expanded.exists() and expanded.is_dir():
+        dataset_hint = expanded.name
+    else:
+        dataset_hint = expanded.parent.name if expanded.parent != expanded else None
+
+    candidates: List[Path] = []
+    processed_roots: set[Path] = set()
+
+    probable_roots: Sequence[Path] = []
+    if dataset_hint:
+        probable_roots = [root / dataset_hint for root in _candidate_results_roots()]
+    else:
+        probable_roots = _candidate_results_roots()
+
+    for root in probable_roots:
+        root = root.resolve()
+        if root in processed_roots or not root.exists():
+            continue
+        processed_roots.add(root)
+        if root.is_file():
+            if root.name == "plans.json":
+                candidates.append(root)
+            continue
+        candidates.extend(root.rglob("plans.json"))
+
+    if not candidates and dataset_hint:
+        # Broaden the search one level up if dataset-specific search failed.
+        for root in _candidate_results_roots():
+            root = root.resolve()
+            if root in processed_roots or not root.exists():
+                continue
+            processed_roots.add(root)
+            candidates.extend(root.rglob("plans.json"))
+
+    if not candidates:
+        raise FileNotFoundError(
+            "Unable to locate plans.json. Checked: "
+            f"{expanded}, its parent, and nnUNet_results roots (dataset hint: {dataset_hint or 'unknown'})."
+        )
+
+    scored = sorted(
+        candidates,
+        key=lambda path: _score_candidate(path, dataset_hint, configuration),
+        reverse=True,
+    )
+
+    return scored[0]
 
 
 def extract_architecture(plans: Dict[str, Any], configuration: str) -> Dict[str, Any]:
@@ -443,7 +552,12 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    plans = load_plans(args.plans)
+    requested_path = args.plans.expanduser().resolve()
+    resolved_plans_path = resolve_plans_path(args.plans, args.config)
+    if resolved_plans_path != requested_path:
+        print(f"Resolved plans file to: {resolved_plans_path}")
+
+    plans = load_plans(resolved_plans_path)
     arch_info = extract_architecture(plans, args.config)
 
     df = architecture_to_frame(arch_info["arch_kwargs"])
