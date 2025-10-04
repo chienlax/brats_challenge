@@ -66,7 +66,8 @@ Use a dedicated venv so your main environment stays untouched.
 python -m venv .venv_nnunet
 .\.venv_nnunet\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+pip install -r requirements_nnunet.txt `
+    --extra-index-url https://download.pytorch.org/whl/cu124   # optional for CUDA wheels
 ```
 
 *Tip:* When you open a new shell, re-run `.\.venv_nnunet\Scripts\Activate.ps1` before nnU-Net work.

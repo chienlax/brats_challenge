@@ -1,0 +1,426 @@
+# BraTS Post-Treatment Toolkit – Comprehensive Project Guide
+
+*Last updated: October 2025*
+
+This document consolidates every operational, architectural, and clinical detail required to maintain, extend, and operate the `brats_challenge` repository. It is intended to be the single source of truth for engineers, data scientists, clinicians, and DevOps partners collaborating on BraTS post-treatment segmentation workflows.
+
+---
+
+## 1. Executive summary
+
+- **Purpose**: Provide reproducible tooling for visualising, analysing, training, and evaluating BraTS post-treatment (post-operative) MRI cohorts.
+- **Pillars**:
+  - Interactive Dash apps for dataset QA (statistics inspector) and slice browsing/export (volume inspector).
+  - Batch scripts for nnU-Net dataset preparation, evaluation, and artefact generation.
+  - MONAI-based transfer-learning pipeline to fine-tune the `brats_mri_segmentation` bundle on post-treatment labels.
+  - Custom lesion-wise metric implementation aligned with official BraTS 2024 scoring.
+- **Data scope**: Post-treatment BraTS cohorts under `training_data/`, `training_data_additional/`, and optional `validation_data/`, each case named `BraTS-GLI-XXXXX-YYY` with four MRI modalities plus segmentation.
+- **Primary outputs**: PNGs, GIFs, JSON statistics/metrics, and NIfTI predictions stored beneath `outputs/` (git-ignored).
+
+---
+
+## 2. Repository layout (source of truth)
+
+| Path | Description |
+| --- | --- |
+| `README.md` | High-level overview and quick commands for all workflows. |
+| `requirements*.txt` | Pinned dependency manifests for the three Python environments: base Dash tooling, nnU-Net, and MONAI. |
+| `apps/common/volume_utils.py` | Canonical utilities for loading, normalising, slicing, caching, and labelling BraTS volumes. All tooling must reuse these helpers. |
+| `apps/volume_inspector/` | Dash volume browser (layout, callbacks, rendering). CSS assets live under `assets/`. |
+| `apps/statistics_inspector/` | Dash dataset QA application (layout, callbacks, data aggregation, caching). |
+| `docs/` | Authoritative documentation set: usage guide, data overviews, medical context, MONAI & nnU-Net guides, and this comprehensive guide. |
+| `scripts/` | CLI utilities (analysis, visualisation, dataset prep, nnU-Net orchestration, MONAI training/inference, architecture visualisation). Legacy scripts live in `scripts/deprecated/` for reference only. |
+| `tests/` | Pytest coverage for volume utilities, rendering, and lesion metrics orchestration. Run before shipping changes. |
+| `training_data*/` | Git-ignored directories where BraTS cases are staged. Ensure naming matches `BraTS-GLI-XXXXX-YYY-{t1c,t1n,t2f,t2w,seg}.nii.gz`. |
+| `outputs/` | Git-ignored artefact root—subdirectories created on demand for caches, figures, metrics, predictions, etc. |
+| `.github/instructions/copilot-instructions.md` | Internal contribution guardrails (loading conventions, architecture expectations, caching rules). Always consult before modifying code. |
+
+> **Reminder**: Never commit data (`training_data*`, `validation_data`, `outputs/`) or large derived artefacts. Version only code, configs, and documentation.
+
+---
+
+## 3. Environments & dependencies
+
+Three isolated Python virtual environments keep tooling reproducible. All commands below use Windows PowerShell (`powershell.exe` v5.1); translate to Bash equivalents as needed.
+
+### 3.1 Dash / reporting environment (`requirements.txt`)
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Key packages: `dash`, `dash-bootstrap-components`, `plotly`, `matplotlib`, `nibabel`, `numpy`, `scipy`, `imageio`, `pandas`, `ipywidgets`, `pytest`.
+
+Use this environment for:
+- `scripts/analyze_statistics.py`
+- `scripts/visualize_volumes.py`
+- Running Pytest suites
+- Editing/previewing Dash apps
+
+### 3.2 nnU-Net environment (`requirements_nnunet.txt`)
+
+```powershell
+python -m venv .venv_nnunet
+.\.venv_nnunet\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements_nnunet.txt `
+    --extra-index-url https://download.pytorch.org/whl/cu124
+```
+
+Highlights: `nnunetv2==2.6.2`, PyTorch 2.6.0 CUDA wheels, `dynamic-network-architectures`, `batchgenerators`, `scikit-image`, `simpleitk`, `hiddenlayer`. The file `nnunet-environment.txt` captures a fully resolved `pip freeze` snapshot—use it when mirroring environments across machines.
+
+Set and persist nnU-Net directories after activation:
+
+```powershell
+New-Item -ItemType Directory -Force outputs\nnunet\nnUNet_{raw,preprocessed,results}
+setx nnUNet_raw "${PWD}\outputs\nnunet\nnUNet_raw"
+setx nnUNet_preprocessed "${PWD}\outputs\nnunet\nnUNet_preprocessed"
+setx nnUNet_results "${PWD}\outputs\nnunet\nnUNet_results"
+```
+
+### 3.3 MONAI fine-tuning environment (`requirements_monai.txt`)
+
+```powershell
+python -m venv .venv_monai
+.\.venv_monai\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements_monai.txt
+```
+
+This environment ships MONAI 1.5.1 plus CUDA-aligned PyTorch wheels and supporting libraries (`filelock`, `fsspec`, `Jinja2`, `sympy`). After installation, verify GPU visibility:
+
+```powershell
+python -c "import torch; print(torch.__version__); print('CUDA:', torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'No GPU')"
+```
+
+Use for `scripts/train_monai_finetune.py` and `scripts/infer_monai_finetune.py`.
+
+---
+
+## 4. Data management & QA hygiene
+
+### 4.1 Directory conventions
+
+- **Training cohorts**: `training_data/` (legacy) and `training_data_additional/` (supplemental). Each contains case folders `BraTS-GLI-XXXXX-YYY/`.
+- **Optional validation**: `validation_data/` for held-out cohorts.
+- **Modalities & labels**: Every case folder must contain:
+  - `*-t1c.nii.gz`, `*-t1n.nii.gz`, `*-t2f.nii.gz`, `*-t2w.nii.gz`
+  - `*-seg.nii.gz` (ground-truth segmentation with labels 0–4)
+- **File naming**: Scripts derive case ID from filenames; deviations trigger `FileNotFoundError`.
+
+### 4.2 Intake checklist
+
+1. Retrieve datasets from secure storage (see links in `docs/data_overview.md`).
+2. Unpack to the correct folders without modifying original voxel grids.
+3. Run dataset statistics recompute (`scripts/analyze_statistics.py --open-browser`, **Dataset Statistics** tab → Recompute) to populate `outputs/statistics_cache/` JSON snapshots.
+4. Update `docs/data_overview.md` if case counts or distributions change.
+5. Spot-check cases in the volume inspector to confirm segmentation alignment and modality integrity.
+6. Keep data directories write-protected to avoid accidental edits; tooling only reads.
+
+### 4.3 Clinical label semantics (from `docs/medical_report.md`)
+
+| Label | Color | Meaning | Primary sequence |
+| --- | --- | --- | --- |
+| 0 | Transparent | Background | n/a |
+| 1 | Blue | Enhancing Tumor (ET) – active, contrast-enhancing tissue; exclude vessels and linear scar enhancement. | T1-Gd vs T1 subtraction |
+| 2 | Red | Non-enhancing Tumor Core (NETC) – necrosis, cysts, intrinsic T1 hyperintensity. | T1 / T1-Gd |
+| 3 | Green | Surrounding Non-enhancing FLAIR Hyperintensity (SNFH) – edema, infiltrative tumor, radiation changes. | FLAIR |
+| 4 | Yellow | Resection Cavity (RC) – post-surgical cavity (fluid-filled). | T2 |
+
+Composite regions used in evaluation: Tumor Core = ET ∪ NETC; Whole Tumor = ET ∪ NETC ∪ SNFH.
+
+Refer to `docs/data_interpretation.md` for MRI orientation basics, voxel spacing, and histogram interpretation guidelines.
+
+---
+
+## 5. Shared utilities & coding guardrails
+
+### 5.1 `apps/common/volume_utils.py`
+
+- **Normalization**: Percentile clipping (1st–99th) then scaling to [0, 1]; fallback to min/max when percentiles collapse.
+- **Slice preparation**: `prepare_slice` preserves radiological orientation with axis-specific flips.
+- **Segmentation legend**: `SEGMENTATION_LABELS` centralises BraTS-compliant colors and labels.
+- **Caching**: `cached_volumes` memoises the last 16 cases for the interactive app; ensure new workflows respect caching semantics or clear cache when mutating data.
+- **Case discovery**: `discover_cases` filters to directories that contain segmentations; reused by both Dash apps.
+
+### 5.2 Contribution rules (`.github/instructions/copilot-instructions.md`)
+
+- Always prefer utilities from `volume_utils` to avoid drift between CLI scripts and Dash apps.
+- Maintain percentiles, color palettes, axis handling, and overlay defaults unless there is a strong reason to deviate (documented in `docs/usage_guide.md`).
+- Batch scripts must fail fast (raise `FileNotFoundError`) on missing inputs.
+- Keep overlays enabled by default; provide opt-out flags (`--no-overlay`, `--overlay` toggles).
+- Use `Path` objects and `np.float32` arrays consistently.
+- Update `docs/usage_guide.md` whenever CLI flags or workflows change.
+
+---
+
+## 6. Interactive Dash applications
+
+### 6.1 Volume Inspector (`apps/volume_inspector`)
+
+- **Entry point**: `scripts/visualize_volumes.py --mode interactive`.
+- **Architecture**:
+  - `data.py`: `VolumeRepository` indexes dataset roots (defaults: `training_data`, `training_data_additional`, `validation_data`). Each case exposed as `CaseDescriptor(key="<root>|<case>")`.
+  - `layout.py`: Sidebar controls (dataset, case, modality, axis, view mode, display quality, overlay toggle, export button). Stores metadata in `dcc.Store` for cross-callback access.
+  - `callbacks.py`: Handles dropdown synchronisation, slider updates, figure rendering, and PNG export. Uses `display_mode_scale` for Standard/High/Best quality and `compose_rgba_slice` for overlays.
+  - `rendering.py`: Plotly figure builders (`create_slice_figure`, `create_modalities_figure`, `create_orthogonal_figure`) plus raw RGBA compositors for exports.
+  - `assets/styles.css`: UI theming (sidebar, legend, buttons).
+- **Features**:
+  - Single-modality or all-modalities view, orthogonal previews, overlay toggle, slice export with timestamped PNG, quality scaling (1×/2×/4×).
+  - Axis slider marks show `[0, mid, max]` indices; automatically recalculated when axis or case changes.
+  - Overlay legend summarises labels 1–4 with BraTS colors.
+
+### 6.2 Statistics Inspector (`apps/statistics_inspector`)
+
+- **Entry point**: `scripts/analyze_statistics.py`.
+- **Architecture**:
+  - `data.py`: `StatisticsRepository` discovers dataset roots, computes per-case summaries, aggregates them, and caches dataset statistics under `outputs/statistics_cache/<dataset>_stats.json`.
+  - `layout.py`: Bootstrap-based UI with two tabs (Case Statistics, Dataset Statistics) and modular control builders.
+  - `callbacks.py`: Wires dropdowns, cache status, per-case computation, and dataset recompute/load flows.
+- **Case Statistics**:
+  - Input: dataset, case, histogram bins.
+  - Output: per-modality histograms (normalised intensities) and segmentation label tables with voxel counts & percentages.
+- **Dataset Statistics**:
+  - Input: dataset, optional max case count.
+  - Output: geometry consistency (shape, spacing, orientation), modality availability, dtype counts, intensity summaries (mean/min/max for p01/p50/p99/mean), segmentation totals, and cached status message.
+  - Buttons: **Load Cached** (reads JSON), **Recompute** (rebuilds and refreshes cache).
+
+---
+
+## 7. Command-line utilities
+
+| Script | Purpose | Key arguments |
+| --- | --- | --- |
+| `scripts/visualize_volumes.py` | Unified visualisation CLI. `--mode interactive` (Dash), `--mode static` (PNG panels), `--mode gif` (slice animations). | Static mode: `--case-dir`, `--layout {modalities,orthogonal}`, `--axis`, `--fraction`/`--index`, `--indices`, `--no-overlay`, `--output`, `--dpi`. GIF mode: `--root`, `--case`, `--output-dir`, `--gif-modality`, `--gif-axis`, `--step`, `--fps`, `--overlay`, `--max-cases`, `--gif-dpi`. |
+| `scripts/analyze_statistics.py` | Launch statistics inspector Dash app. | `--data-root` (repeatable), `--host`, `--port`, `--debug`, `--open-browser`. |
+| `scripts/compute_brats_lesion_metrics.py` | Standalone BraTS 2024 lesion-wise Dice/HD95 scorer with 26-connectivity matching, penalties for misses/spurious, and aggregates (TC/WT). | Positional `ground_truth`, `predictions`; optional `--output`, `--labels`, `--omit-aggregates`, `--pretty`. |
+| `scripts/run_full_evaluation.py` | Orchestrate `nnUNetv2_evaluate_simple` and lesion metrics in one command; outputs three JSON files in a single directory. | Positional `ground_truth`, `predictions`; `--output-dir`, `--labels`, `--omit-aggregates`, `--nnunet-cmd`, `--skip-nnunet`, `--pretty`. |
+| `scripts/prepare_nnunet_dataset.py` | Reorganise BraTS cases into nnU-Net v2 dataset structure with hardlinks/copies and `dataset.json` synthesis. | `--train-sources`, `--test-sources`, `--dataset-id`, `--nnunet-raw`, `--clean`, `--require-test-labels`. |
+| `scripts/visualize_architecture.py` | Resolve `plans.json`, print architecture tables, and build overview/detailed diagrams (PNG/SVG). | `plans` path, `--config`, `--output`, `--detailed-output`, `--vector-output`, etc. |
+| `scripts/train_monai_finetune.py` | Two-stage MONAI bundle fine-tuning (Stage 1: freeze encoder; Stage 2: full fine-tuning). | `--data-root` (repeat), `--split-json`, `--fold`, `--bundle-name/dir`, stage hyperparameters (`--stage*-epochs/lr/accum`), `--batch-size`, `--cache-rate`, `--patch-size`, `--spacing`, `--class-weights`, `--val-interval`, `--amp`, `--resume`, `--encoder-prefix`, `--head-key`, `--eval-roi`, `--sw-*`, `--save-checkpoint-frequency`. |
+| `scripts/infer_monai_finetune.py` | Validation inference for fine-tuned MONAI checkpoints; optional auto-evaluation. | `--data-root`, `--split-json`, `--fold`, `--checkpoint`, `--output-dir`, `--roi-size`, `--spacing`, `--sw-*`, `--amp`, `--run-evaluation`, `--ground-truth`, `--evaluation-output`, `--seed`. |
+
+Deprecated scripts (`scripts/deprecated/`) retain historical commands and migration notes; new work must use the unified tools above.
+
+---
+
+## 8. MONAI fine-tuning pipeline
+
+### 8.1 Training stages (`scripts/train_monai_finetune.py`)
+
+- **Input indexing**: `load_splits` reads nnU-Net `splits_final.json` to mirror fold membership; `build_case_index` merges cases from all `--data-root` directories.
+- **Transforms**: Composable pipeline ensures RAS orientation, 1 mm isotropic spacing, percentile intensity scaling, foreground cropping, spatial padding, and positive/negative sampling around labels. Augmentations mirror nnU-Net DA5 (flips, affine jitter, Gaussian noise/smoothing, histogram shift, bias field, coarse dropout, zoom) while respecting 12 GB VRAM budgets.
+- **Model init**: Loads MONAI bundle, replaces final `Conv3d` head with 5-channel output (BG + ET/NETC/SNFH/RC) via `replace_output_head`.
+- **Stage 1** (defaults: 80 epochs, lr=1e-3, grad accum=3): Encoder params frozen (`set_encoder_trainable(..., trainable=False)`). Best validation Dice tracked (`dice_mean` across 4 classes) and saved to `outputs/monai_ft/checkpoints/stage1_best.pt`.
+- **Stage 2** (140 epochs, lr=1e-5, accum=2): Entire network unfrozen; best checkpoint saved as `stage2_best.pt`. Periodic checkpoints saved every `--save-checkpoint-frequency` epochs.
+- **Validation**: Sliding-window inference (`sliding_window_inference`) with ROI size / overlap configurable; metrics include per-class Dice and mean. AMP optional.
+- **Output artefacts**: Checkpoints under `outputs/monai_ft/checkpoints`, JSON training log at `outputs/monai_ft/metrics/training_log.json`.
+
+### 8.2 Inference (`scripts/infer_monai_finetune.py`)
+
+- Reuses preprocessing transforms (RAS orientation, spacing, percentile scaling, foreground crop, padding) to ensure alignment with training.
+- Loads checkpoint weights (Stage 1 or 2) and performs sliding-window inference with optional AMP.
+- Saves NIfTI predictions to `--output-dir`, using nnU-Net naming conventions (`BraTS-GLI-XXXX-XXX.nii.gz`). If MONAI `SaveImaged` is unavailable, falls back to NiBabel.
+- Optional evaluation: `--run-evaluation` triggers `python scripts/run_full_evaluation.py <ground_truth> <output_dir> --output-dir <evaluation_output>` in the same environment.
+
+### 8.3 Best practices
+
+- Always activate `.venv_monai` before running training or inference.
+- Use `--amp` when GPUs support mixed precision; monitor VRAM usage when adjusting `--batch-size`, `--patch-size`, or sliding-window parameters.
+- Tuning class weights: default `(1.0, 1.0, 1.0, 1.5)` upweights RC to counter class imbalance; adjust per cohort and document in `docs/usage_guide.md`.
+- Resume support: stage-specific checkpoints; Stage 1 & Stage 2 checkpoints are not interchangeable.
+
+---
+
+## 9. nnU-Net workflow
+
+### 9.1 Dataset preparation (`scripts/prepare_nnunet_dataset.py`)
+
+- Discovers case directories, validates modality presence, and populates:
+  - `imagesTr/CASE_0000.nii.gz` … `CASE_0003.nii.gz`
+  - `labelsTr/CASE.nii.gz`
+  - Optional `imagesTs` / `labelsTs` when test cases provided.
+- Uses hardlinks when possible (falls back to copy). `--clean` wipes existing dataset folder before regenerating.
+- `dataset.json` contains channel names, label map, training/test manifests, release metadata, and `test_labels_available` when residual segmentations exist.
+
+### 9.2 Planning, training, inference, evaluation
+
+1. **Plan & preprocess**: `nnUNetv2_plan_and_preprocess -d 501 --verify_dataset_integrity`
+2. **Train**: `nnUNetv2_train Dataset501_BraTSPostTx <configuration> <fold> --npz`
+3. **Predict**: `nnUNetv2_predict -i <imagesTs> -o <predictions> -d 501 -c <configuration> -f all --device cuda`
+4. **Evaluate**: `nnUNetv2_evaluate_simple <labelsTs> <predictions> -o <metrics.json> -l 1 2 3 4`
+5. **One-step reports**: `scripts/run_full_evaluation.py` orchestrates nnU-Net CLI + lesion metrics and writes `nnunet_metrics.json`, `lesion_metrics.json`, `full_metrics.json` to `outputs/nnunet/reports/metrics/...`.
+
+### 9.3 Architecture visualisation (`scripts/visualize_architecture.py`)
+
+- Resolves `plans.json` from user-provided path or searches `nnUNet_results` directories using dataset/config hints.
+- Prints encoder/decoder tables (features, kernels, strides, convolution blocks) and saves overview/detailed diagrams (PNG/SVG) for documentation.
+- Append diagrams to experiment reports under `outputs/nnunet/reports/architecture/` (git-ignored).
+
+### 9.4 Hiddenlayer compatibility
+
+- `hiddenlayer` generates `network_architecture.pdf` when training with `.venv_nnunet`. A compatibility shim (`sitecustomize.py`) reintroduces deprecated `torch.onnx._optimize_trace` for PyTorch ≥2.4; ensure repository root remains on `PYTHONPATH` when running nnU-Net commands elsewhere.
+
+---
+
+## 10. Evaluation & metrics
+
+### 10.1 Lesion-wise metrics (`scripts/compute_brats_lesion_metrics.py`)
+
+- Implements official BraTS 2024 lesion matching via 26-connectivity connected components.
+- Per-case outputs include `LesionWise_Dice` and `LesionWise_HD95` per label and (optionally) composite regions (TC/WT).
+- Penalties:
+  - Missed lesions → Dice = 0, HD95 = volume diagonal (mm).
+  - Spurious lesions → Dice = 0, HD95 = volume diagonal.
+- JSON output structure:
+  - `cases` → metrics and lesion tables for each case.
+  - `summary` → cohort mean/median/min/max/std per label.
+
+### 10.2 Combined evaluation (`scripts/run_full_evaluation.py`)
+
+- Optional `--skip-nnunet` when nnU-Net CLI unavailable (e.g., offline scoring) while still producing lesion metrics.
+- Accepts explicit output paths (`--nnunet-output`, `--lesion-output`, `--combined-output`). Defaults set under `--output-dir`.
+- On success prints absolute locations of all generated reports.
+- Pytests ensure CLI invocation failure is surfaced when binary missing and that JSON payloads contain expected aggregates.
+
+---
+
+## 11. Visual outputs & reporting
+
+### 11.1 Static figures
+
+- Use `visualize_volumes.py --mode static` to generate publication-ready PNGs.
+- Layouts:
+  - `modalities` (grid of available sequences for one slice).
+  - `orthogonal` (sagittal/coronal/axial views of a single modality).
+- Control overlay visibility (`--no-overlay`), slice position (`--fraction`, `--index`, or `--indices`), and resolution (`--dpi`).
+
+### 11.2 GIF animations
+
+- `visualize_volumes.py --mode gif` processes individual cases or entire roots.
+- Output naming: `<CASE>_<MODALITY>_<AXIS>.gif` under `--output-dir`.
+- Use `--step` to reduce frames and `--gif-dpi` to manage file size. Overlays optional via `--overlay`.
+
+### 11.3 Interactive exports
+
+- Volume inspector allows one-click PNG export; filenames embed case, modality mode, axis, slice index, and timestamp.
+- Statistics inspector caches dataset JSON under `outputs/statistics_cache/` and surfaces case histograms/label tables in-browser; capture screenshots for reports when needed.
+
+---
+
+## 12. Testing & quality gates
+
+### 12.1 Automated tests
+
+Run from repository root (Dash environment):
+
+```powershell
+python -m pytest -q
+```
+
+Coverage:
+- `tests/test_volume_utils.py`: Normalisation bounds, slice picking, orientation correctness.
+- `tests/test_rendering.py`: RGBA scaling, alpha channel preservation, modalities grid composition.
+- `tests/test_lesion_metrics.py`: Corner cases for lesion matching (perfect matches, missed/spurious penalties, empty masks), CLI orchestration (successful run, missing nnU-Net command), and JSON schema validation.
+
+### 12.2 Manual checks
+
+- Launch both Dash apps to ensure dependencies installed and caching functions (`--open-browser`).
+- Recompute dataset statistics after data updates and compare with prior JSON caches for regressions.
+- Generate at least one static PNG and one GIF to verify Matplotlib/ImageIO pipelines.
+- When modifying MONAI or nnU-Net workflows, rerun short smoke tests (reduced epochs, limited cases) before full-scale training.
+
+### 12.3 Quality gate summary
+
+1. **Build/Install**: `pip install -r requirements*.txt` in respective venvs.
+2. **Unit tests**: `python -m pytest -q`.
+3. **Smoke**: Launch Dash apps, run sample CLI commands.
+4. **Data validation**: Regenerate statistics caches on new cohorts.
+
+---
+
+## 13. Documentation catalogue
+
+| File | Focus |
+| --- | --- |
+| `docs/usage_guide.md` | Canonical quick-start, environment setup, workflow walkthroughs, automation patterns, troubleshooting. Update whenever CLI flags or flows change. |
+| `docs/data_overview.md` | Latest case counts, geometry consistency, intensity landscape, segmentation distributions, QA playbooks. Generated from statistics inspector recomputes. |
+| `docs/data_interpretation.md` | MRI fundamentals, voxel spacing/orientation primer, histogram interpretation, label definitions. |
+| `docs/medical_report.md` | Clinically grounded definition of each label, imaging sequence heuristics, common annotation errors, and evaluation metric explanations. |
+| `docs/MONAI_guide.md` | Step-by-step environment setup, training/inference workflows, CLI flag reference for MONAI scripts. |
+| `docs/nnU-Net_guide.md` | Windows-focused nnU-Net installation, environment persistence, dataset preparation, training/evaluation recipes, architecture export, troubleshooting. |
+| `nn-unet_official_docs/` | Imported official documentation snippets (dataset format, normalisation, plans files, installation) for offline reference. |
+
+When contributing new workflows or scripts, extend the relevant doc(s) and link them here.
+
+---
+
+## 14. Outputs, caches, and artefact management
+
+| Location | Producer | Contents | Notes |
+| --- | --- | --- | --- |
+| `outputs/statistics_cache/` | Statistics inspector | Cached dataset JSON (e.g., `training_data_stats.json`). | Safe to delete to force recompute. |
+| `outputs/gifs/` | `visualize_volumes.py --mode gif` | Animated slice reels per case/modality/axis. | Can grow large; prune regularly. |
+| `outputs/monai_ft/checkpoints/` | MONAI training | Stage-specific checkpoints (`stage1_best.pt`, `stage2_best.pt`, periodic snapshots). | Keep best models; archive older ones offline. |
+| `outputs/monai_ft/metrics/` | MONAI training | `training_log.json` with per-epoch loss/metrics timing. |
+| `outputs/monai_ft/predictions/` | MONAI inference | NIfTI predictions per fold. | Use subfolders (`fold0`, etc.). |
+| `outputs/monai_ft/reports/` | `infer_monai_finetune.py --run-evaluation` | Evaluation JSON bundles. |
+| `outputs/nnunet/nnUNet_raw/` | Dataset prep | nnU-Net raw dataset (imagesTr/Ts, labelsTr/Ts, dataset.json). |
+| `outputs/nnunet/nnUNet_preprocessed/` | nnU-Net CLI | Cached tensors after planning/preprocessing. |
+| `outputs/nnunet/nnUNet_results/` | nnU-Net training | Checkpoints, logs, architecture PDFs. |
+| `outputs/nnunet/predictions/` | nnU-Net inference | Predicted NIfTI volumes per configuration. |
+| `outputs/nnunet/reports/metrics/` | `run_full_evaluation.py` | `nnunet_metrics.json`, `lesion_metrics.json`, `full_metrics.json`. |
+| `outputs/nnunet/reports/architecture/` | `visualize_architecture.py` | Architecture diagrams (PNG/SVG). |
+
+> **Policy**: All `outputs/` directories are git-ignored. Sync artefacts separately when sharing results (e.g., zipped reports + README with commands).
+
+---
+
+## 15. Troubleshooting highlights
+
+See Section 10 of `docs/usage_guide.md` plus the clinical error catalogue in `docs/medical_report.md`. Key reminders:
+
+- **Missing files** → Tooling raises `FileNotFoundError`; re-verify case folder contents.
+- **Empty dropdowns** in Dash apps → Data roots not detected; pass `--data-root` or ensure directories exist.
+- **GIF generation slow** → Increase `--step` or reduce `--gif-dpi`.
+- **Orientation confusion** → Slices follow radiological convention (`('L', 'A', 'S')`), meaning left appears on the right of images; do not mirror unless clinically mandated.
+- **nnU-Net CLI missing** → Ensure `.venv_nnunet` active and environment variables set; `run_full_evaluation.py` will signal if `nnUNetv2_evaluate_simple` absent.
+- **MONAI bundle download failures** → Use `--no-download --bundle-dir <path>` with pre-downloaded assets.
+
+---
+
+## 16. Collaboration workflow & guardrails
+
+1. `git pull` latest code; sync datasets from secure storage.
+2. Activate relevant virtual environment and install requirements (pinned versions only).
+3. Recompute statistics cache after ingesting new cohorts; update `docs/data_overview.md` accordingly.
+4. Run required CLI workflows (visualisations, training, inference) saving outputs under `outputs/`.
+5. Update documentation (including this file) when workflows, flags, or dependencies change.
+6. Run `python -m pytest -q` before committing.
+7. Do **not** commit data, outputs, or generated media; only code/config/docs.
+
+---
+
+## 17. Glossary & reference quick links
+
+- **ET / NETC / SNFH / RC**: See detailed definitions in Section 4.3 and `docs/medical_report.md`.
+- **TC / WT**: Composite evaluation regions (Tumor Core, Whole Tumor).
+- **Percentile normalisation**: 1st–99th percentile intensity clipping used throughout pipeline.
+- **Sliding-window inference**: Technique used by MONAI scripts to process 3D volumes that exceed GPU memory.
+- **CacheDataset**: MONAI dataset wrapper enabling partial/full caching of transformed samples (`--cache-rate`).
+- **Connected-components (26-connectivity)**: Lesion grouping method used for lesion-wise metrics.
+
+For supplementary reading, consult `nn-unet_official_docs/*.md` (dataset format, preprocessing plans, path setup) and external references linked within `docs/*.md`.
+
+---
+
+**Document maintenance**: Update this guide whenever:
+- New scripts or CLI flags are introduced or modified.
+- Dependency versions change in any `requirements*.txt` file.
+- Data intake processes, caching paths, or evaluation metrics evolve.
+- Clinical label definitions or QA procedures are refined.
+
+Keep the file synchronized with commit history to ensure on-boarding speed and operational reliability.

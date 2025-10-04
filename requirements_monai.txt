@@ -1,0 +1,18 @@
+# MONAI fine-tuning environment 
+# (use for scripts/train_monai_finetune.py and scripts/infer_monai_finetune.py)
+
+filelock==3.19.1
+fsspec==2025.9.0
+Jinja2==3.1.6
+MarkupSafe==3.0.3
+monai==1.5.1
+mpmath==1.3.0
+networkx==3.5
+numpy==2.3.3
+pillow==11.0.0
+setuptools==80.9.0
+sympy==1.13.1
+torch==2.6.0+cu124
+torchaudio==2.6.0+cu124
+torchvision==0.21.0+cu124
+typing_extensions==4.15.0

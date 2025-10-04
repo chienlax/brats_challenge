@@ -17,6 +17,7 @@ Authoritative instructions for setting up the environment, staging BraTS post-tr
 	- [5.2 Visualization suite (`scripts/visualize_volumes.py`)](#52-visualization-suite-scriptsvisualize_volumespy)
 	- [5.3 Lesion-wise metrics (`scripts/compute_brats_lesion_metrics.py`)](#53-lesion-wise-metrics-scriptscompute_brats_lesion_metricspy)
 	- [5.4 Legacy scripts (`scripts/deprecated/`)](#54-legacy-scripts-scriptsdeprecated)
+	- [5.5 MONAI fine-tuning (`scripts/train_monai_finetune.py`, `scripts/infer_monai_finetune.py`)](#55-monai-fine-tuning-scriptstrain_monai_finetunepy-scriptsinfer_monai_finetunepy)
 - [6. Dash app internals](#6-dash-app-internals)
 - [7. Outputs, caches, and storage](#7-outputs-caches-and-storage)
 - [8. Automation & batching patterns](#8-automation--batching-patterns)
@@ -94,6 +95,24 @@ python --version
 ```powershell
 pip install --upgrade pip
 pip install -r requirements.txt
+```
+
+Optional: create the nnU-Net environment (for evaluation helpers and CLI tooling):
+
+```powershell
+python -m venv .venv_nnunet
+.\.venv_nnunet\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements_nnunet.txt
+```
+
+Optional: create the MONAI fine-tuning environment (for transfer learning scripts):
+
+```powershell
+python -m venv .venv_monai
+.\.venv_monai\Scripts\Activate.ps1
+pip install --upgrade pip
+pip install -r requirements_monai.txt
 ```
 
 Sanity-check a random package:
@@ -295,6 +314,93 @@ challenge scoring rules. Use the lesion tables to audit which component(s) faile
 ### 5.4 Legacy scripts (`scripts/deprecated/`)
 
 Older commands (`launch_volume_inspector.py`, `visualize_brats.py`, `generate_case_gifs.py`, `generate_case_statistics.py`, `summarize_brats_dataset.py`) are preserved for historical reference in `scripts/deprecated/README.md`. They are **unsupported**; new workflows should use the unified tools above.
+
+### 5.5 MONAI fine-tuning (`scripts/train_monai_finetune.py`, `scripts/infer_monai_finetune.py`)
+
+> **Prerequisites:** Activate `.venv_monai` and install dependencies via
+> `pip install -r requirements_monai.txt`. Ensure you also have access to
+> `nnUNet_preprocessed/.../splits_final.json` to mirror nnU-Net fold
+> memberships.
+
+These scripts implement the staged transfer learning pipeline using MONAI's
+`brats_mri_segmentation` bundle as the starting point.
+
+#### 5.5.1 Training (stage 1 & 2)
+
+```powershell
+python scripts/train_monai_finetune.py `
+		--data-root training_data training_data_additional `
+		--split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+		--fold 0 `
+		--output-root outputs/monai_ft `
+		--amp
+```
+
+Run this command from the `.venv_monai` environment to ensure MONAI and its
+dependencies are available.
+
+Highlights:
+
+- Loads the MONAI bundle, replaces the 3-class head with a 5-class head, and
+	caches it under `outputs/monai_ft/checkpoints/`.
+- Stage 1 freezes encoder parameters (prefixes configurable via
+	`--encoder-prefix`) and trains decoder/head with lr=1e-3 and gradient
+	accumulation to accommodate 12 GB VRAM.
+- Stage 2 unfreezes everything, drops lr to 1e-5, and continues to refine the
+	encoder.
+- Augmentations mirror nnU-Net DA5: flips, affine jitter, histogram shifts,
+	bias fields, Gaussian noise/smoothing, low-resolution simulation, and coarse
+	dropout.
+- Validation runs sliding-window inference every `--val-interval` epochs and
+	tracks the best Dice score on the fold-0 validation set.
+- Training history is exported to `outputs/monai_ft/metrics/training_log.json`.
+
+Key flags:
+
+| Flag | Purpose |
+|------|---------|
+| `--bundle-name` | Override the MONAI bundle (default `brats_mri_segmentation`). |
+| `--stage1-*` / `--stage2-*` | Control epochs, learning rates, and gradient accumulation. |
+| `--class-weights` | Set DiceCE weights for ET/NETC/SNFH/RC (background excluded). |
+| `--patch-size` / `--spacing` | Tweak patch size and voxel spacing if needed. |
+| `--resume` | Resume from a specific checkpoint (stage-specific). |
+
+#### 5.5.2 Inference & evaluation
+
+```powershell
+python scripts/infer_monai_finetune.py `
+		--data-root training_data training_data_additional `
+		--split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+		--fold 0 `
+		--checkpoint outputs/monai_ft/checkpoints/stage2_best.pt `
+		--output-dir outputs/monai_ft/predictions/fold0 `
+		--amp `
+		--run-evaluation `
+		--ground-truth training_data `
+		--evaluation-output outputs/monai_ft/reports/fold0
+```
+
+Inference should likewise be executed from `.venv_monai`.
+
+Behaviour:
+
+- Re-applies deterministic preprocessing (orientation, spacing, percentile
+	scaling, padding) for validation cases.
+- Performs sliding-window inference with configurable ROI size, overlap, and
+	mixed-precision support.
+- Writes predictions as `BraTS-GLI-XXXX-XXX.nii.gz` into the requested output
+	directory, matching nnU-Net naming conventions.
+- Optional `--run-evaluation` flag reuses `scripts/run_full_evaluation.py` to
+	compute nnU-Net + lesion-wise metrics for apples-to-apples comparison.
+
+Additional flags of interest:
+
+| Flag | Purpose |
+|------|---------|
+| `--roi-size`, `--sw-batch-size`, `--sw-overlap` | Tune sliding-window inference. |
+| `--no-download` | Skip bundle download attempts (use cached copy). |
+| `--ground-truth`, `--evaluation-output` | Provide evaluation inputs/outputs when using `--run-evaluation`. |
+| `--seed` | Control randomness for reproducibility.
 
 ---
 

@@ -18,15 +18,26 @@ import subprocess
 from pathlib import Path
 from typing import Iterable, Mapping, MutableMapping, Sequence
 
-from compute_brats_lesion_metrics import (
-	build_label_groups,
-	case_id_from_filename,
-	collect_cases,
-	compute_case_metrics,
-	find_prediction_file,
-	load_segmentation,
-	summarise_metrics,
-)
+try:  # pragma: no cover - allow import when used as module
+	from compute_brats_lesion_metrics import (
+		build_label_groups,
+		case_id_from_filename,
+		collect_cases,
+		compute_case_metrics,
+		find_prediction_file,
+		load_segmentation,
+		summarise_metrics,
+	)
+except ImportError:  # pragma: no cover
+	from scripts.compute_brats_lesion_metrics import (  # type: ignore
+		build_label_groups,
+		case_id_from_filename,
+		collect_cases,
+		compute_case_metrics,
+		find_prediction_file,
+		load_segmentation,
+		summarise_metrics,
+	)
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:

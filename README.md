@@ -4,13 +4,87 @@
 
 ## Setup
 
-Create and activate the Python environment (already configured in `.venv/`):
+Create and activate the Dash/reporting environment (`.venv/`):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
+
+For nnU-Net tooling use the dedicated `.venv_nnunet/` environment:
+
+```powershell
+python -m venv .venv_nnunet
+.\.venv_nnunet\Scripts\Activate.ps1
+pip install -r requirements_nnunet.txt
+```
+
+For MONAI fine-tuning create a separate `.venv_monai/` environment:
+
+```powershell
+python -m venv .venv_monai
+.\.venv_monai\Scripts\Activate.ps1
+pip install -r requirements_monai.txt `
+    --extra-index-url https://download.pytorch.org/whl/cu124
+```
+
+> **GPU tip:** Adjust the `--extra-index-url` to match your CUDA toolkit (for
+> example `cu118`, `cu121`, etc.). Omit the flag for CPU-only installs.
+
+## MONAI Fine-Tuning Workflow
+
+We provide end-to-end scripts for the two-stage transfer learning strategy:
+
+1. **Training** – run the staged fine-tuning loop.
+2. **Inference** – generate fold-specific validation predictions.
+3. **Evaluation** – reuse the unified `run_full_evaluation.py` helper to obtain
+     Dice, HD95, and lesion-wise metrics aligned with nnU-Net reports.
+
+### Stage 1 & 2 Training *(run from `.venv_monai`)*
+
+```
+python scripts/train_monai_finetune.py `
+    --data-root training_data training_data_additional `
+    --split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+    --fold 0 `
+    --output-root outputs/monai_ft `
+    --amp
+```
+
+Key behaviours:
+
+- Loads the MONAI `brats_mri_segmentation` bundle (downloading if necessary).
+- Replaces the 3-class head with a 5-class head (BG, ET, NETC, SNFH, RC).
+- Stage 1 freezes encoder blocks and trains decoder/head at lr=1e-3.
+- Stage 2 unfreezes everything and continues with lr=1e-5.
+- Augmentations mirror nnU-Net DA5 (affine jitter, histogram/intensity noise,
+    low-resolution simulation, coarse dropout) while remaining 12 GB friendly.
+- Best checkpoints are written to `outputs/monai_ft/checkpoints/` and a
+    training log is captured in JSON.
+
+### Validation Inference & Evaluation *(run from `.venv_monai`)*
+
+```
+python scripts/infer_monai_finetune.py `
+    --data-root training_data training_data_additional `
+    --split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+    --fold 0 `
+    --checkpoint outputs/monai_ft/checkpoints/stage2_best.pt `
+    --output-dir outputs/monai_ft/predictions/fold0 `
+    --amp `
+    --run-evaluation `
+    --ground-truth training_data `
+    --evaluation-output outputs/monai_ft/reports/fold0
+```
+
+The inference helper:
+
+- Reapplies the deterministic preprocessing chain and sliding-window inference.
+- Saves predictions as `BraTS-GLI-XXXX-XXX.nii.gz` in the requested output
+    directory, matching nnU-Net naming conventions.
+- Optionally invokes `scripts/run_full_evaluation.py` to compute Dice, HD95, and
+    lesion-wise metrics alongside the nnU-Net baseline for a direct comparison.
 
 ## Statistics Inspector
 
