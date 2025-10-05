@@ -51,7 +51,7 @@ If PowerShell blocks the activation script, run `Set-ExecutionPolicy -Scope Curr
    ```powershell
    python scripts/train_monai_finetune.py `
        --data-root training_data training_data_additional `
-       --split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+       --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
        --fold 0 `
        --output-root outputs/monai_ft `
        --bundle-name brats_mri_segmentation `
@@ -115,22 +115,26 @@ If PowerShell blocks the activation script, run `Set-ExecutionPolicy -Scope Curr
 | `--head-key` | `str` / `output_layer` | Attribute name of the bundle’s final convolution; used when regenerating the output head. | Required if your bundle exposes the head under a different name. |
 
 #### Common training workflows
+```powershell
+python scripts/train_monai_finetune.py `
+    --data-root training_data `
+    --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+    --batch-size 1 --num-workers 2 `
+    --stage1-epochs 2 --stage2-epochs 2 `
+    --patch-size 64 64 64 `
+    --fold 0 `
+    --output-root outputs/monai_ft_nnunet_aligned `
+    --amp
+```
 
-- **Quick smoke test** (reduced epochs, higher cache rate):
-  ```powershell
-  python scripts/train_monai_finetune.py `
-      --data-root training_data `
-      --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
-      --stage1-epochs 5 --stage2-epochs 5 `
-      --cache-rate 1.0 --amp
-  ```
+
 - **Resume Stage 1 after interruption**:
     ```powershell
     python scripts/train_monai_finetune.py `
             --data-root training_data training_data_additional `
             --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
             --fold 0 `
-            --resume outputs/monai_ft/checkpoints/stage1_epoch40.pt `
+            --resume outputs/monai_ft_smoke/checkpoints/stage1_epoch40.pt `
             --amp
     ```
 - **Resume Stage 2 from its latest checkpoint**:
@@ -139,7 +143,7 @@ If PowerShell blocks the activation script, run `Set-ExecutionPolicy -Scope Curr
             --data-root training_data training_data_additional `
             --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
             --fold 0 `
-            --resume outputs/monai_ft/checkpoints/stage2_epoch120.pt `
+            --resume outputs/monai_ft_smoke/checkpoints/stage2_epoch120.pt `
             --amp
     ```
 
@@ -155,11 +159,11 @@ If PowerShell blocks the activation script, run `Set-ExecutionPolicy -Scope Curr
 
    ```powershell
    python scripts/infer_monai_finetune.py `
-       --data-root training_data training_data_additional `
-       --split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+       --data-root training_data_additional `
+       --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
        --fold 0 `
-       --checkpoint outputs/monai_ft/checkpoints/stage2_best.pt `
-       --output-dir outputs/monai_ft/predictions/fold0 `
+       --checkpoint outputs/monai_ft_smoke/fold0/checkpoints/stage2_best.pt `
+       --output-dir outputs/monai_ft_smoke/predictions/fold0 `
        --bundle-name brats_mri_segmentation `
        --amp
    ```
@@ -195,16 +199,26 @@ If PowerShell blocks the activation script, run `Set-ExecutionPolicy -Scope Curr
 
 ```powershell
 python scripts/infer_monai_finetune.py `
-    --data-root training_data `
-    --split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+    --data-root training_data_additional `
+    --dataset-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/dataset.json `
     --fold 0 `
-    --checkpoint outputs/monai_ft/checkpoints/stage2_best.pt `
-    --output-dir outputs/monai_ft/predictions/fold0 `
-    --ground-truth training_data `
+    --checkpoint outputs/monai_ft_nnunet_aligned/fold0/checkpoints/stage2_best.pt `
+    --output-dir outputs/monai_ft_nnunet_aligned/predictions/fold0 `
+    --amp `
     --run-evaluation `
-    --evaluation-output outputs/monai_ft/eval_reports `
-    --amp
+    --ground-truth outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs
 ```
+
+```powershell
+python scripts/run_full_evaluation_monai.py `
+    outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
+    outputs/monai_ft_nnunet_aligned/predictions/fold0 `
+    --output-dir outputs/reports/monai_fold0 `
+    --pretty
+```
+
+
+
 
 This command generates NIfTI predictions and immediately writes Dice/Tversky summaries under `outputs/monai_ft/eval_reports`.
 

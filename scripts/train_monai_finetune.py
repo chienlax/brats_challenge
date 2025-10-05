@@ -8,20 +8,12 @@ This script implements the two-stage curriculum described in the project plan:
    a much lower learning rate so the encoder can adapt gently to post-treatment
    MRI appearances.
 
-The training pipeline mirrors nnU-Net preprocessing and augmentation choices to
-ensure a fair comparison:
+The training pipeline mirrors nnU-Net v2 preprocessing and augmentation choices:
 - Orientation is normalised to RAS and volumes are resampled to 1 mm isotropic.
-- Modalities are normalised with percentile-based intensity scaling.
-- Training crops use positive/negative sampling around foreground voxels.
+- Modalities are Z-score normalised over the foreground voxels.
+- Training crops use a patch size of 128x128x128 and positive/negative sampling.
 - Augmentations include flips, affine jitter, histogram shifts, bias fields,
   Gaussian smoothing, coarse dropout, and low-resolution simulation.
-
-Usage example (PowerShell):
-
-python scripts/train_monai_finetune.py --data-root training_data training_data_additional `
---split-json nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json --fold 0 `
---output-root outputs/monai_ft `
---bundle-name brats_mri_segmentation
 
 The script expects MONAI and huggingface-hub to be installed in the active environment.
 It will download the model bundle from Hugging Face on its first run into an `artifacts`
@@ -44,7 +36,7 @@ from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tupl
 import numpy as np
 import torch
 from torch import nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 
 try:
@@ -63,6 +55,7 @@ try:
         EnsureChannelFirstd,
         EnsureTyped,
         LoadImaged,
+        NormalizeIntensityd,
         Orientationd,
         RandAdjustContrastd,
         RandAffined,
@@ -74,7 +67,6 @@ try:
         RandGaussianSmoothd,
         RandHistogramShiftd,
         RandZoomd,
-        ScaleIntensityRangePercentilesd,
         Spacingd,
         SpatialPadd,
     )
@@ -93,7 +85,9 @@ def _default_device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-MODALITIES: Tuple[str, ...] = ("t1c", "t1n", "t2w", "t2f")
+# Modality order aligned with nnU-Net V2 dataset.json for Dataset501_BraTSPostTx
+# 0: T2 FLAIR, 1: T1-pre, 2: T1-post, 3: T2
+MODALITIES: Tuple[str, ...] = ("t2f", "t1n", "t1c", "t2w")
 NUM_OUTPUT_CHANNELS = 5  # BG + NETC + ET + SNFH + RC
 
 
@@ -121,7 +115,12 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Path to the nnU-Net splits_final.json for Dataset501_BraTSPostTx (or equivalent).",
     )
-    parser.add_argument("--fold", type=int, default=0, help="Fold index to use for validation (default: 0).")
+    parser.add_argument(
+        "--fold",
+        type=str,
+        default="0",
+        help='Fold index to use for validation, or "all" to run 5-fold cross-validation (default: "0").',
+    )
     parser.add_argument(
         "--bundle-name",
         type=str,
@@ -190,14 +189,14 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=1,
-        help="Per-iteration batch size (default: 1 to fit on 12 GB GPUs).",
+        default=2,
+        help="Per-iteration batch size. Default 2 to match nnU-Net plans.",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=2,
-        help="Number of worker processes for the DataLoader (default: 2).",
+        default=4,
+        help="Number of worker processes for the DataLoader (default: 4).",
     )
     parser.add_argument(
         "--cache-rate",
@@ -209,8 +208,8 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         "--patch-size",
         type=int,
         nargs=3,
-        default=(224, 224, 144),
-        help="Spatial size for training patches (default: 224 224 144).",
+        default=(128, 128, 128),
+        help="Spatial size for training patches, aligned with nnU-Net plans (default: 128 128 128).",
     )
     parser.add_argument(
         "--spacing",
@@ -245,9 +244,9 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--class-weights",
         type=float,
-        nargs=4,
-        default=(1.0, 1.0, 1.0, 1.5),
-        help="Class weights (ET, NETC, SNFH, RC) for the DiceCE loss (background is excluded).",
+        nargs=NUM_OUTPUT_CHANNELS,
+        default=(0.5, 1.0, 1.0, 1.0, 1.5),
+        help=f"Class weights (BG, ET, NETC, SNFH, RC) for the DiceCE loss. Expects {NUM_OUTPUT_CHANNELS} values.",
     )
     parser.add_argument(
         "--resume",
@@ -271,8 +270,8 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         "--eval-roi",
         type=int,
         nargs=3,
-        default=(224, 224, 144),
-        help="Sliding window ROI size for validation inference (default: 224 224 144).",
+        default=(128, 128, 128),
+        help="Sliding window ROI size for validation inference, aligned with nnU-Net plans (default: 128 128 128).",
     )
     parser.add_argument(
         "--sw-batch-size",
@@ -289,7 +288,7 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--save-checkpoint-frequency",
         type=int,
-        default=10,
+        default=1,
         help="Write checkpoint every N epochs in addition to the best models (default: 10).",
     )
     return parser.parse_args(argv)
@@ -356,21 +355,14 @@ def prepare_datasets(
 
     base_transforms = [
         LoadImaged(keys=list(MODALITIES) + ["label"], ensure_channel_first=False),
-        EnsureChannelFirstd(keys=list(MODALITIES) + ["label"]),  # Added to ensure label has channel dim
+        EnsureChannelFirstd(keys=list(MODALITIES) + ["label"]),
         ConcatItemsd(keys=list(MODALITIES), name="image", dim=0),
         DeleteItemsd(keys=list(MODALITIES)),
         Orientationd(keys=["image", "label"], axcodes="RAS"),
         Spacingd(keys=["image", "label"], pixdim=spacing, mode=("bilinear", "nearest")),
-        ScaleIntensityRangePercentilesd(
-            keys="image",
-            lower=0.5,
-            upper=99.5,
-            b_min=-1.0,
-            b_max=1.0,
-            clip=True,
-        ),
-        CropForegroundd(keys=["image", "label"], source_key="label"),
-        # SpatialPadd(keys=["image", "label"], spatial_size=patch_size, mode="constant"),
+        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+        CropForegroundd(keys=["image", "label"], source_key="label", allow_smaller=True),
+        SpatialPadd(keys=["image", "label"], spatial_size=patch_size, mode="constant"),
     ]
 
     train_aug = Compose(
@@ -432,7 +424,17 @@ def prepare_datasets(
     return train_dataset, val_dataset
 
 
-def collate_fn(batch: List[Mapping[str, torch.Tensor]]) -> Mapping[str, torch.Tensor]:
+def train_collate_fn(batch: List[List[Mapping[str, torch.Tensor]]]) -> Mapping[str, torch.Tensor]:
+    # Unpack the inner list since RandCropByPosNegLabeld returns a list of dicts
+    batch = [item[0] for item in batch]
+    images = torch.stack([item["image"] for item in batch], dim=0)
+    labels = torch.stack([item["label"] for item in batch], dim=0)
+    meta = {key: [item[key] for item in batch] for key in batch[0] if key not in {"image", "label"}}
+    return {"image": images, "label": labels, **meta}
+
+
+def val_collate_fn(batch: List[Mapping[str, torch.Tensor]]) -> Mapping[str, torch.Tensor]:
+    # Validation data is not wrapped in an extra list
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.stack([item["label"] for item in batch], dim=0)
     meta = {key: [item[key] for item in batch] for key in batch[0] if key not in {"image", "label"}}
@@ -443,30 +445,27 @@ def initialise_model(
     bundle_name: str, artifacts_dir: Path, device: torch.device, bundle_dir: Path | None = None
 ) -> nn.Module:
     """Initialises model, downloading from Hugging Face if not present."""
-    # Determine the local path for the bundle
     local_bundle_path = bundle_dir
     if local_bundle_path is None:
         local_bundle_path = artifacts_dir / bundle_name
-        # If the bundle doesn't exist locally, download it from Hugging Face
         if not local_bundle_path.exists():
             repo_id = f"MONAI/{bundle_name}"
             print(f"Bundle not found at {local_bundle_path}. Downloading from Hugging Face: {repo_id}")
-            # Create parent directory if it doesn't exist
             artifacts_dir.mkdir(parents=True, exist_ok=True)
             snapshot_download(repo_id=repo_id, local_dir=local_bundle_path, repo_type="model")
 
     print(f"Loading MONAI bundle from: {local_bundle_path}")
-    components = bundle_load(
-        bundle_dir=local_bundle_path,
-    )
+    components = bundle_load(name=bundle_name, bundle_dir=local_bundle_path)
 
-    network = components.get("network")
-    if network is None:
-        raise RuntimeError(f"Failed to load network from MONAI bundle '{bundle_name}'.")
-
-    state_dict = components.get("state_dict") or components.get("model")
-    if state_dict:
-        network.load_state_dict(state_dict)
+    if isinstance(components, nn.Module):
+        network = components
+    else:
+        network = components.get("network")
+        if network is None:
+            raise RuntimeError(f"Failed to load network from MONAI bundle '{bundle_name}'.")
+        state_dict = components.get("state_dict") or components.get("model")
+        if state_dict:
+            network.load_state_dict(state_dict)
 
     network.to(device)
     return network
@@ -531,12 +530,12 @@ def create_optimizer(model: nn.Module, config: StageConfig) -> torch.optim.Optim
     return torch.optim.AdamW(params, lr=config.learning_rate, weight_decay=config.weight_decay)
 
 
-def create_loss(class_weights: Sequence[float]) -> DiceCELoss:
-    weight_tensor = torch.as_tensor(class_weights, dtype=torch.float32)
+def create_loss(class_weights: Sequence[float], device: torch.device) -> DiceCELoss:
+    weight_tensor = torch.as_tensor(class_weights, dtype=torch.float32, device=device)
     return DiceCELoss(
         to_onehot_y=True,
         softmax=True,
-        include_background=False,
+        include_background=True,
         smooth_nr=1e-5,
         smooth_dr=1e-5,
         weight=weight_tensor,
@@ -561,7 +560,7 @@ def train_one_epoch(
         images = batch["image"].to(device, non_blocking=True)
         labels = batch["label"].to(device, non_blocking=True)
 
-        with autocast(enabled=amp):
+        with autocast('cuda', enabled=amp):
             logits = model(images)
             loss = loss_fn(logits, labels)
             loss = loss / config.grad_accum
@@ -599,7 +598,7 @@ def validate(
             images = batch["image"].to(device, non_blocking=True)
             labels = batch["label"].to(device, non_blocking=True)
 
-            with autocast(enabled=amp):
+            with autocast('cuda', enabled=amp):
                 logits = sliding_window_inference(
                     inputs=images,
                     roi_size=roi_size,
@@ -608,8 +607,9 @@ def validate(
                     overlap=overlap,
                     mode="gaussian",
                 )
-            preds = [post_pred(tensor)[:, 1:] for tensor in decollate_batch(logits)]
-            gts = [post_label(tensor)[:, 1:] for tensor in decollate_batch(labels)]
+            # Convert MetaTensors to plain Tensors before decollating to avoid metadata iteration error
+            preds = [post_pred(tensor)[:, 1:] for tensor in decollate_batch(logits.as_tensor())]
+            gts = [post_label(tensor)[:, 1:] for tensor in decollate_batch(labels.as_tensor())]
             dice_metric(y_pred=preds, y=gts)
 
     dice = dice_metric.aggregate().cpu().numpy()
@@ -663,15 +663,15 @@ def ensure_meta_dirs(output_root: Path) -> Mapping[str, Path]:
     return dirs
 
 
-def main(argv: Iterable[str] | None = None) -> None:
-    args = parse_args(argv)
-
+def run_fold(fold: int, args: argparse.Namespace):
+    """Run the full training pipeline for a single fold."""
     device = _default_device()
-    print(f"Using device: {device}")
+    output_root = args.output_root / f"fold{fold}"
+    print(f"\n{'='*80}\nRunning training for fold {fold}\nOutputs will be saved to: {output_root}\n{'='*80}")
 
-    set_determinism(args.seed)
+    set_determinism(args.seed + fold)  # Use different seed for each fold
 
-    train_ids, val_ids = load_splits(args.split_json, args.fold)
+    train_ids, val_ids = load_splits(args.split_json, fold)
     index = build_case_index(args.data_root)
     train_dataset, val_dataset = prepare_datasets(
         train_ids=train_ids,
@@ -689,7 +689,7 @@ def main(argv: Iterable[str] | None = None) -> None:
         num_workers=args.num_workers,
         pin_memory=True,
         persistent_workers=False,
-        collate_fn=collate_fn,
+        collate_fn=train_collate_fn,
     )
     val_loader = DataLoader(
         val_dataset,
@@ -698,17 +698,18 @@ def main(argv: Iterable[str] | None = None) -> None:
         num_workers=0,
         pin_memory=True,
         persistent_workers=False,
-        collate_fn=collate_fn,
+        collate_fn=val_collate_fn,
     )
 
     model = initialise_model(args.bundle_name, args.artifacts_dir, device, args.bundle_dir)
     model = replace_output_head(model, NUM_OUTPUT_CHANNELS)
+    model.to(device)
 
     stage1_cfg, stage2_cfg = stage_config_from_args(args)
-    loss_fn = create_loss(args.class_weights)
+    loss_fn = create_loss(args.class_weights, device)
 
     history: List[MutableMapping[str, object]] = []
-    dirs = ensure_meta_dirs(args.output_root)
+    dirs = ensure_meta_dirs(output_root)
 
     scaler = GradScaler(enabled=args.amp)
 
@@ -786,7 +787,27 @@ def main(argv: Iterable[str] | None = None) -> None:
     metrics_path = dirs["metrics"] / "training_log.json"
     with metrics_path.open("w", encoding="utf-8") as handle:
         json.dump(history, handle, indent=2)
-    print(f"Training complete. Logs written to {metrics_path}")
+    print(f"Training for fold {fold} complete. Logs written to {metrics_path}")
+
+
+def main(argv: Iterable[str] | None = None) -> None:
+    args = parse_args(argv)
+    device = _default_device()
+    print(f"Using device: {device}")
+
+    if args.fold.lower() == "all":
+        folds_to_run = range(5)
+    else:
+        try:
+            fold_idx = int(args.fold)
+            if not 0 <= fold_idx < 5:
+                raise ValueError
+            folds_to_run = [fold_idx]
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid fold specified: '{args.fold}'. Must be an integer 0-4 or 'all'.")
+
+    for fold in folds_to_run:
+        run_fold(fold, args)
 
 
 if __name__ == "__main__":  # pragma: no cover

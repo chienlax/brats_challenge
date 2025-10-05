@@ -7,6 +7,14 @@ post-treatment lesion-wise metrics using the repository's
 ``compute_brats_lesion_metrics`` module. All reports are written to the same
 output directory so a single command yields the standard nnU-Net summary,
 lesion-wise details, and a combined manifest tying everything together.
+
+CLI:
+python scripts/run_full_evaluation.py `
+    outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
+    outputs/monai_ft_nnunet_aligned/predictions/fold0 `
+    --output-dir outputs/monai_ft_nnunet_aligned/reports/fold0 `
+    --pretty
+
 """
 
 from __future__ import annotations
@@ -15,6 +23,7 @@ import argparse
 import json
 import shutil
 import subprocess
+import nibabel as nib
 from pathlib import Path
 from typing import Iterable, Mapping, MutableMapping, Sequence
 

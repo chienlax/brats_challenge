@@ -24,7 +24,7 @@ Please provide the **path** to the old task, not just the Task name. nnU-Net V2 
 ### Experiment planning and preprocessing
 Given a new dataset, nnU-Net will extract a dataset fingerprint (a set of dataset-specific properties such as
 image sizes, voxel spacings, intensity information etc). This information is used to design three U-Net configurations. 
-Each of these pipelines operates on its own preprocessed version of the dataset.
+Each of these ppielines operates on its own preprocessed version of the dataset.
 
 The easiest way to run fingerprint extraction, experiment planning and preprocessing is to use:
 
