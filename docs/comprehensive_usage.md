@@ -16,29 +16,41 @@ This document consolidates the end-to-end workflow for every maintained script i
 
 ### 1.2 Python environments
 
-| Workflow | Interpreter | Commands (PowerShell) |
-|----------|-------------|-----------------------|
-| Core tooling, visualization, statistics | `.venv\Scripts\python.exe` | ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-``` |
-| nnU-Net dataset prep & evaluation | `.venv_nnunet\Scripts\python.exe` | ```powershell
-python -m venv .venv_nnunet
-.\.venv_nnunet\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements_nnunet.txt --extra-index-url https://download.pytorch.org/whl/cu124
-``` |
-| MONAI fine-tuning & inference | `.venv_monai\Scripts\python.exe` | ```powershell
-python -m venv .venv_monai
-.\.venv_monai\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
-pip install "monai[all]" nibabel pydicom ipywidgets==8.1.2
-pip uninstall -y pytensor
-pip install -U filelock
-``` |
+- **Core tooling, visualization, statistics**  
+    Interpreter: `.venv\Scripts\python.exe`  
+    Commands (PowerShell):
+
+    ```powershell
+    python -m venv .venv
+    .\.venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+
+- **nnU-Net dataset prep & evaluation**  
+    Interpreter: `.venv_nnunet\Scripts\python.exe`  
+    Commands (PowerShell):
+
+    ```powershell
+    python -m venv .venv_nnunet
+    .\.venv_nnunet\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -r requirements_nnunet.txt --extra-index-url https://download.pytorch.org/whl/cu124
+    ```
+
+- **MONAI fine-tuning & inference**  
+    Interpreter: `.venv_monai\Scripts\python.exe`  
+    Commands (PowerShell):
+
+    ```powershell
+    python -m venv .venv_monai
+    .\.venv_monai\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install --index-url https://download.pytorch.org/whl/cu124 torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0
+    pip install "monai[all]" nibabel pydicom ipywidgets==8.1.2
+    pip uninstall -y pytensor
+    pip install -U filelock
+    ```
 
 > **Tip:** Always re-run the appropriate `Activate.ps1` when you open a new shell. If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
 
@@ -68,16 +80,53 @@ setx nnUNet_results "${PWD}\outputs\nnunet\nnUNet_results"
 
 ## 2. Script quick reference
 
-| Script | Purpose | Recommended environment | Typical inputs | Primary outputs |
-|--------|---------|-------------------------|----------------|-----------------|
-| `scripts/analyze_statistics.py` | Launch Dash app for per-case & cohort statistics | `.venv` | Dataset roots | In-browser UI, cached JSON under `outputs/statistics_cache/` |
-| `scripts/visualize_volumes.py` | Interactive viewer, static PNGs, GIF generation | `.venv` | BraTS case folders | Dash app, PNG figures, GIF animations |
-| `scripts/prepare_nnunet_dataset.py` | Convert BraTS folders into nnU-Net v2 dataset structure | `.venv_nnunet` | Raw case roots | `outputs/nnunet/nnUNet_raw/Dataset*/` tree + `dataset.json` |
-| `scripts/train_monai_finetune.py` | Two-stage MONAI fine-tuning aligned with nnU-Net folds | `.venv_monai` | Case roots, `splits_final.json` | Checkpoints, training logs under `outputs/monai_ft*/` |
-| `scripts/infer_monai_finetune.py` | Sliding-window inference from MONAI checkpoints | `.venv_monai` | Case roots, `dataset.json`, checkpoints | NIfTI predictions, optional evaluation reports |
-| `scripts/compute_brats_lesion_metrics.py` | Lesion-wise BraTS metrics for predictions vs. ground truth | `.venv` or `.venv_nnunet` | Ground-truth + prediction directories | JSON metrics (per-case + summary) |
-| `scripts/run_full_evaluation.py` | Drive nnU-Net CLI evaluation + lesion metrics in one step | `.venv_nnunet` | Ground-truth + prediction directories | nnU-Net metrics, lesion metrics, merged manifest |
-| `scripts/visualize_architecture.py` | Plot nnU-Net architecture details from `plans.json` | `.venv` (w/ matplotlib) | `plans.json` path | PNG/SVG diagrams, console table |
+- `scripts/analyze_statistics.py`  
+    Purpose: Launch the Dash app for per-case and cohort statistics.  
+    Environment: `.venv`  
+    Typical inputs: dataset roots.  
+    Primary outputs: interactive browser UI and cached JSON files under `outputs/statistics_cache/`.
+
+- `scripts/visualize_volumes.py`  
+    Purpose: Provide interactive viewing, static PNG export, and GIF generation.  
+    Environment: `.venv`  
+    Typical inputs: BraTS case folders.  
+    Primary outputs: Dash app, PNG figures, GIF animations.
+
+- `scripts/prepare_nnunet_dataset.py`  
+    Purpose: Convert BraTS folders into the nnU-Net v2 dataset structure.  
+    Environment: `.venv_nnunet`  
+    Typical inputs: raw case roots.  
+    Primary outputs: `outputs/nnunet/nnUNet_raw/Dataset*/` tree and `dataset.json`.
+
+- `scripts/train_monai_finetune.py`  
+    Purpose: Run two-stage MONAI fine-tuning aligned with nnU-Net folds.  
+    Environment: `.venv_monai`  
+    Typical inputs: case roots plus `splits_final.json`.  
+    Primary outputs: checkpoints and training logs stored in `outputs/monai_ft*/`.
+
+- `scripts/infer_monai_finetune.py`  
+    Purpose: Perform sliding-window inference from MONAI checkpoints.  
+    Environment: `.venv_monai`  
+    Typical inputs: case roots, `dataset.json`, checkpoints.  
+    Primary outputs: NIfTI predictions and optional evaluation reports.
+
+- `scripts/compute_brats_lesion_metrics.py`  
+    Purpose: Compute lesion-wise BraTS metrics comparing predictions to ground truth.  
+    Environment: `.venv` or `.venv_nnunet`  
+    Typical inputs: ground-truth and prediction directories.  
+    Primary outputs: JSON metrics (per-case and summary).
+
+- `scripts/run_full_evaluation.py`  
+    Purpose: Drive nnU-Net CLI evaluation together with lesion metrics.  
+    Environment: `.venv_nnunet`  
+    Typical inputs: ground-truth and prediction directories.  
+    Primary outputs: nnU-Net metrics, lesion metrics, and a merged manifest.
+
+- `scripts/visualize_architecture.py`  
+    Purpose: Plot nnU-Net architecture details from `plans.json`.  
+    Environment: `.venv` (with matplotlib).  
+    Typical inputs: path to `plans.json`.  
+    Primary outputs: PNG/SVG diagrams and a console table summary.
 
 ---
 
@@ -97,13 +146,10 @@ python scripts/analyze_statistics.py --open-browser
 ```
 
 **Key arguments:**
-
-| Flag | Description |
-|------|-------------|
-| `--data-root PATH` (repeatable) | Override the dataset roots (defaults: `training_data`, `training_data_additional`, `validation_data`). |
-| `--host`, `--port` | Bind interface/port (default `127.0.0.1:8050`). |
-| `--debug` | Enable Dash hot reload for development. |
-| `--open-browser` | Auto-launch the default browser after the server starts. |
+- `--data-root PATH` (repeatable): override the dataset roots (defaults to `training_data`, `training_data_additional`, `validation_data`).
+- `--host`, `--port`: bind interface/port (default `127.0.0.1:8050`).
+- `--debug`: enable Dash hot reload for development.
+- `--open-browser`: automatically open the app in the default browser once the server starts.
 
 **Workflow tips:**
 - Launch once per session; cached aggregates avoid recomputation between runs.
@@ -184,14 +230,11 @@ python scripts/prepare_nnunet_dataset.py `
 - Test cases may omit `-seg` unless `--require-test-labels` is specified (recommended when evaluating against labels).
 
 **Arguments to know:**
-
-| Flag | Notes |
-|------|-------|
-| `--train-sources`, `--test-sources` | Override default roots. Multiple values allowed. |
-| `--dataset-id` | Target folder inside `nnUNet_raw`. Must match downstream training/evaluation IDs. |
-| `--nnunet-raw` | Custom raw root (defaults to `outputs/nnunet/nnUNet_raw`). |
-| `--clean` | Remove any existing dataset folder before rebuilding (prevents stale cases). |
-| `--require-test-labels` | Abort if any test case lacks a segmentation; ensures `labelsTs/` is complete. |
+- `--train-sources`, `--test-sources`: override the default roots; accepts multiple directories.
+- `--dataset-id`: names the folder inside `nnUNet_raw` and must match downstream training/evaluation IDs.
+- `--nnunet-raw`: points to a custom raw data root (defaults to `outputs/nnunet/nnUNet_raw`).
+- `--clean`: removes any existing dataset folder before rebuilding to prevent stale cases.
+- `--require-test-labels`: aborts if any test case lacks a segmentation so that `labelsTs/` stays complete.
 
 **Outputs:**
 - `outputs/nnunet/nnUNet_raw/<dataset-id>/imagesTr/*.nii.gz`
@@ -223,15 +266,12 @@ python scripts/train_monai_finetune.py `
 - Stable GPU-enabled MONAI environment (`.venv_monai`).
 
 **Key arguments:**
-
-| Flag | Description |
-|------|-------------|
-| `--fold` (`0`-`4` or `all`) | Controls validation fold. `all` loops over all five folds. |
-| `--stage1-*` / `--stage2-*` | Epoch counts, learning rates, grad accumulation, etc. |
-| `--patch-size`, `--spacing` | Resampling and crop geometry (defaults align with nnU-Net plans). |
-| `--class-weights` | DiceCE weights for background + tumor subregions (tuple of 5 values). |
-| `--resume` | Resume Stage 1 or Stage 2 from a saved checkpoint. Stage-specific checks enforce safety. |
-| `--amp` | Enables PyTorch AMP for faster, memory-friendly runs. |
+- `--fold` (`0`–`4` or `all`): selects the validation fold; `all` loops through every fold.
+- `--stage1-*` / `--stage2-*`: control curriculum parameters such as epochs, learning rates, and gradient accumulation.
+- `--patch-size`, `--spacing`: define resampling and crop geometry (defaults mirror nnU-Net plans).
+- `--class-weights`: specify DiceCE weights for background plus tumor subregions (five values expected).
+- `--resume`: resume Stage 1 or Stage 2 from a saved checkpoint with stage-aware safety checks.
+- `--amp`: enable PyTorch automatic mixed precision for faster, memory-friendly runs.
 
 **Outputs:**
 - Checkpoints under `outputs/monai_ft*/fold*/checkpoints/` (stage best + epoch snapshots).
@@ -269,13 +309,10 @@ python scripts/infer_monai_finetune.py `
 - The script replaces the bundle’s head with a 5-channel Conv3D to match BraTS labels.
 
 **Important flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--fold` | Accepts `0`-`4` or `all`. When using `all`, embed `{fold}` placeholders in `--checkpoint` and `--output-dir`. |
-| `--spacing`, `--patch-size`, `--roi-size`, `--sw-batch-size`, `--sw-overlap` | Align inference geometry with training choices. |
-| `--ground-truth`, `--evaluation-output`, `--run-evaluation` | If provided, the script invokes `scripts/run_full_evaluation.py` on completion. |
-| `--amp` | Enables mixed-precision inference. |
+- `--fold`: accepts `0`–`4` or `all`; when using `all`, include `{fold}` placeholders in `--checkpoint` and `--output-dir`.
+- `--spacing`, `--patch-size`, `--roi-size`, `--sw-batch-size`, `--sw-overlap`: keep inference geometry aligned with training choices.
+- `--ground-truth`, `--evaluation-output`, `--run-evaluation`: when provided together, the script calls `scripts/run_full_evaluation.py` after inference.
+- `--amp`: enables mixed-precision inference.
 
 **Outputs:**
 - NIfTI segmentations saved as `<case>.nii.gz` under the chosen output directory.
@@ -303,12 +340,9 @@ python scripts/compute_brats_lesion_metrics.py `
 **Inputs:** both directories must contain `.nii.gz` files with consistent case IDs. The script tolerates suffix variations (`-seg`, `_seg`, `_pred`).
 
 **Key options:**
-
-| Flag | Description |
-|------|-------------|
-| `--labels` | Foreground labels to evaluate (default `1 2 3 4`). |
-| `--omit-aggregates` | Skip Tumor Core (TC) and Whole Tumor (WT) aggregates. |
-| `--pretty` | Pretty-print the JSON output. |
+- `--labels`: foreground labels to evaluate (defaults to `1 2 3 4`).
+- `--omit-aggregates`: skip Tumor Core (TC) and Whole Tumor (WT) aggregates.
+- `--pretty`: pretty-print the JSON output.
 
 **Outputs:**
 - JSON file containing `cases` (per-case metrics & lesion tables) and `summary` (mean/median/min/max/std for each label).
@@ -338,12 +372,9 @@ python scripts/run_full_evaluation.py `
 3. Writes three JSONs inside `--output-dir` by default: `nnunet_metrics.json`, `lesion_metrics.json`, and `full_metrics.json`.
 
 **Useful flags:**
-
-| Flag | Description |
-|------|-------------|
-| `--nnunet-output`, `--lesion-output`, `--combined-output` | Override default file locations. |
-| `--skip-nnunet` | Skip the nnU-Net CLI invocation (useful if the binary is unavailable). |
-| `--labels`, `--omit-aggregates` | Passed through to the lesion metrics module. |
+- `--nnunet-output`, `--lesion-output`, `--combined-output`: override the default file locations.
+- `--skip-nnunet`: skip the nnU-Net CLI invocation when the binary is unavailable.
+- `--labels`, `--omit-aggregates`: forward these parameters to the lesion metrics module.
 
 **Requirements:** `nnUNetv2_evaluate_simple` must be discoverable on `PATH` (activate `.venv_nnunet`). If it’s missing, either install nnU-Net v2 or run with `--skip-nnunet`.
 
@@ -367,13 +398,10 @@ python scripts/visualize_architecture.py `
 - Generates both overview plots and detailed block diagrams; can emit raster (`.png`) and vector (`.svg`) outputs.
 
 **Arguments:**
-
-| Flag | Description |
-|------|-------------|
-| `--config` | Configuration key under `plans.json` (default `3d_fullres`). |
-| `--output` | Path for the overview figure (PNG by default). |
-| `--detailed-output` | Path for the detailed block diagram (defaults to `<output>_detailed.png`). |
-| `--vector-output`, `--detailed-vector-output` | Vector export paths (SVG/PDF depending on suffix). |
+- `--config`: configuration key within `plans.json` (default `3d_fullres`).
+- `--output`: output path for the overview figure (PNG by default).
+- `--detailed-output`: path for the detailed block diagram (defaults to `<output>_detailed.png`).
+- `--vector-output`, `--detailed-vector-output`: vector export paths (SVG/PDF depending on suffix).
 
 **Dependencies:** matplotlib and pandas (already included via `requirements.txt`). Ensure a GUI-less backend is fine—the script defaults to saving figures rather than showing them.
 
@@ -397,28 +425,24 @@ python scripts/prepare_nnunet_dataset.py `
     --require-test-labels
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `--train-sources DIR...` | Labeled case roots that populate `imagesTr/labelsTr`. | Point to alternate storage or subset by site. |
-| `--test-sources DIR...` | Roots for held-out cases copied into `imagesTs/`. | Swap for different validation cohorts. |
-| `--dataset-id NAME` | Folder name beneath `nnUNet_raw`. | Use unique IDs per experiment (e.g., `Dataset502_Internal`). |
-| `--nnunet-raw PATH` | Overrides the default `outputs/nnunet/nnUNet_raw`. | Custom storage or network share. |
-| `--clean` | Removes any existing dataset folder before rebuilding. | Always enable when regenerating to avoid stale cases. |
-| `--require-test-labels` | Fails if a test case lacks `-seg`; also creates `labelsTs/`. | Turn off when unlabeled test cases are expected. |
+- `--train-sources DIR...`: labeled case roots that populate `imagesTr/labelsTr`; adjust when you need alternate storage locations or want to subset by site.
+- `--test-sources DIR...`: roots for held-out cases copied into `imagesTs/`; change this when targeting different validation cohorts.
+- `--dataset-id NAME`: folder name beneath `nnUNet_raw`; pick unique IDs for each experiment (for example `Dataset502_Internal`).
+- `--nnunet-raw PATH`: overrides the default `outputs/nnunet/nnUNet_raw`; use when the raw data lives elsewhere (network share, external drive, etc.).
+- `--clean`: removes any existing dataset folder before rebuilding; enable whenever you regenerate the dataset to avoid stale cases.
+- `--require-test-labels`: fails if a test case lacks `-seg` and also creates `labelsTs/`; disable only when you expect unlabeled test cases.
 
 #### Step 2 – Plan & preprocess (`nnUNetv2_plan_and_preprocess`)
 
 ```powershell
 .\.venv_nnunet\Scripts\Activate.ps1
-nnUNetv2_plan_and_preprocess -d 501 -c 3d_fullres --verify_dataset_integrity
+nnUNetv2_plan_and_preprocess -d 501 --verify_dataset_integrity --no_preprocessing False
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `-d 501` | Dataset ID created in Step&nbsp;1. | Match any custom `--dataset-id`. |
-| `--verify_dataset_integrity` | Performs a thorough check before preprocessing. | Disable for faster reruns when data already validated. |
-| `--no_preprocessing` | Skips tensor caching when set to `True`. | Keep default (`False`) unless you want a plan-only dry run. |
-| `-c CONFIG` | Limit preprocessing to a subset of configurations (e.g., `3d_fullres`). | Use when storage is tight or only one config is needed. |
+- `-d 501`: dataset ID created in Step&nbsp;1; change it whenever you use a custom `--dataset-id` during preparation.
+- `--verify_dataset_integrity`: performs a thorough sanity check before preprocessing; disable only for faster reruns when the data was already validated.
+- `--no_preprocessing`: skips tensor caching when set to `True`; keep the default (`False`) unless you just want a plan-only dry run.
+- `-c CONFIG`: limits preprocessing to a subset of configurations (for example `3d_fullres`); enable when storage is tight or only one configuration is required.
 
 > **Artifacts:** This step produces `splits_final.json`, `plans.json`, and cached tensors under `outputs/nnunet/nnUNet_preprocessed/`.
 
@@ -426,17 +450,15 @@ nnUNetv2_plan_and_preprocess -d 501 -c 3d_fullres --verify_dataset_integrity
 
 ```powershell
 .\.venv_nnunet\Scripts\Activate.ps1
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz --device cuda
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz --device cuda --continue_training False
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `Dataset501_BraTSPostTx` | Dataset ID. | Match custom ID. |
-| `3d_fullres` | Configuration key. | Swap to `2d`, `3d_lowres`, etc., for alternate plans. |
-| `0` | Fold index (`0`–`4` or `all`). | Run all folds for ensembling. |
-| `--npz` | Saves softmax probabilities for visualization (requires `hiddenlayer`). | Disable to save disk space. |
-| `--device` | Target device (`cuda`, `cpu`). | Force CPU training on GPU-less nodes. |
-| `--continue_training` | Resume an interrupted run. | Set `True` with a matching checkpoint in place. |
+- `Dataset501_BraTSPostTx`: dataset ID; align with any custom ID you used during preparation.
+- `3d_fullres`: configuration key; swap to `2d`, `3d_lowres`, or another plan when exploring alternatives.
+- `0`: fold index (`0`–`4` or `all`); run all folds when you need an ensemble.
+- `--npz`: saves softmax probabilities for visualization (requires `hiddenlayer`); disable to conserve disk space.
+- `--device`: target device (`cuda` or `cpu`); force CPU training when GPUs are unavailable.
+- `--continue_training`: resumes an interrupted run; set to `True` when a matching checkpoint is present.
 
 Repeat the command for each fold or replace the final argument with `all` for sequential training.
 
@@ -452,14 +474,12 @@ nnUNetv2_predict -i outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/imagesTs `
     --save_probabilities
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `-i PATH` | Input directory containing cases to segment. | Swap to `imagesTr` for cross-validation checks. |
-| `-o PATH` | Destination for NIfTI predictions. | Point to experiment-specific folders. |
-| `-d NAME` | Dataset ID. | Keep consistent with training. |
-| `-c CONFIG` | Configuration key. | Use alternative plans (e.g., `2d`). |
-| `-f FOLD...` | Folds to use (space-separated). | Provide multiple folds for ensemble prediction. |
-| `--save_probabilities` | Stores per-class softmax maps. | Disable to reduce disk footprint. |
+- `-i PATH`: input directory containing cases to segment; swap to `imagesTr` when performing cross-validation checks.
+- `-o PATH`: destination for NIfTI predictions; point to experiment-specific folders to keep results organized.
+- `-d NAME`: dataset ID; keep it consistent with whatever you used for training.
+- `-c CONFIG`: configuration key; choose alternative plans such as `2d` when needed.
+- `-f FOLD...`: folds to use (space-separated); supply multiple folds to generate ensemble predictions.
+- `--save_probabilities`: stores per-class softmax maps; disable when you need to trim disk usage.
 
 #### Step 5 – Consolidate evaluation (`scripts/run_full_evaluation.py`)
 
@@ -472,15 +492,13 @@ python scripts/run_full_evaluation.py `
     --pretty
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `ground_truth` (positional) | Directory with reference segmentations. | Use `labelsTr` for training-fold evaluation. |
-| `predictions` (positional) | Directory with model outputs. | Swap in MONAI predictions for head-to-head comparisons. |
-| `--output-dir PATH` | Folder for the three JSON reports. | Separate per fold or per experiment. |
-| `--nnunet-cmd NAME` | Override evaluator executable (default `nnUNetv2_evaluate_simple`). | Point to custom builds or wrapper scripts. |
-| `--labels LIST` | Foreground labels to score. | Restrict when certain labels are absent. |
-| `--omit-aggregates` | Skip Tumor Core/Whole Tumor metrics. | Enable for strict per-label reporting. |
-| `--skip-nnunet` | Skip the nnU-Net CLI call. | Use when only lesion-wise metrics are needed. |
+- `ground_truth` (positional): directory with reference segmentations; point to `labelsTr` when evaluating training folds.
+- `predictions` (positional): directory containing model outputs; swap in MONAI predictions for head-to-head comparisons.
+- `--output-dir PATH`: folder for the three JSON reports; separate directories per fold or per experiment keep results tidy.
+- `--nnunet-cmd NAME`: overrides the evaluator executable (default `nnUNetv2_evaluate_simple`); use custom builds or wrapper scripts as needed.
+- `--labels LIST`: foreground labels to score; restrict the list when certain labels are absent.
+- `--omit-aggregates`: skips Tumor Core and Whole Tumor metrics; enable for strict per-label reporting only.
+- `--skip-nnunet`: skips the nnU-Net CLI call; rely on it when you only need lesion-wise metrics.
 
 Optional extras after evaluation:
 - `python scripts/visualize_architecture.py ...` to export architecture diagrams (`plans.json`).
@@ -500,12 +518,10 @@ python scripts/prepare_nnunet_dataset.py `
     --dataset-id Dataset501_BraTSPostTx
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `--train-sources DIR...` | Identical to nnU-Net Step&nbsp;1. | Point at whichever cohorts you plan to fine-tune on. |
-| `--test-sources DIR...` | Supplies inference cases for MONAI validation/testing. | Swap or omit if MONAI should ignore a cohort. |
-| `--dataset-id NAME` | Drives MONAI path defaults (e.g., `dataset.json`). | Keep aligned with nnU-Net artifacts. |
-| `--require-test-labels` | Optional guard when using evaluation during inference. | Enable if you expect labels for all MONAI eval cases. |
+- `--train-sources DIR...`: same semantics as nnU-Net Step&nbsp;1; point at the cohorts you’ll fine-tune on.
+- `--test-sources DIR...`: supplies inference cases for MONAI validation or testing; swap or omit if MONAI should ignore a cohort.
+- `--dataset-id NAME`: drives MONAI path defaults (such as `dataset.json`); keep it aligned with the nnU-Net artifacts.
+- `--require-test-labels`: optional guard for evaluation-time label checks; enable when you expect labels for every MONAI evaluation case.
 
 > **Note:** If Step&nbsp;1 was already run for nnU-Net, rerun with `--clean` only when the raw data changed.
 
@@ -523,16 +539,14 @@ python scripts/train_monai_finetune.py `
     --amp
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `--data-root DIR...` | BraTS roots containing modalities + `-seg`. | Add more roots to enlarge training data. |
-| `--split-json PATH` | nnU-Net folds guaranteeing consistent validation splits. | Replace when experimenting with new fold definitions. |
-| `--fold {0-4,all}` | Which fold(s) to train. | Use `all` for five sequential runs, or a single index for rapid iteration. |
-| `--output-root PATH` | Parent folder for checkpoints/logs. | Separate per experiment (`outputs/monai_ft_baseline`). |
-| `--stage1-epochs`, `--stage2-epochs` | Curriculum length for decoder vs. full fine-tuning. | Shorten for smoke tests or lengthen for more convergence time. |
-| `--stage1-lr`, `--stage2-lr` | Learning rates for each stage. | Tune when loss diverges or plateaus. |
-| `--batch-size`, `--stage*-accum` | Memory controls. | Lower batch size or raise accumulation on smaller GPUs. |
-| `--amp` | Enables mixed precision. | Disable only when debugging numerical issues. |
+- `--data-root DIR...`: BraTS roots containing modalities plus `-seg`; add more roots when you want to enlarge the training data.
+- `--split-json PATH`: nnU-Net folds guaranteeing consistent validation splits; replace this file when you experiment with new fold definitions.
+- `--fold {0-4,all}`: selects which fold(s) to train; use `all` for the full five-run sweep or a single index for rapid iteration.
+- `--output-root PATH`: parent folder for checkpoints and logs; separate directories such as `outputs/monai_ft_baseline` keep experiments isolated.
+- `--stage1-epochs`, `--stage2-epochs`: define the curriculum length for decoder-only vs. full fine-tuning; shorten for smoke tests or extend for deeper convergence.
+- `--stage1-lr`, `--stage2-lr`: learning rates for each stage; tune them when loss diverges or plateaus.
+- `--batch-size`, `--stage*-accum`: memory controls; lower the batch size or increase accumulation on smaller GPUs.
+- `--amp`: enables mixed precision; disable it only while debugging numerical issues.
 
 #### Step 3 – Run MONAI inference (`scripts/infer_monai_finetune.py`)
 
@@ -549,17 +563,15 @@ python scripts/infer_monai_finetune.py `
     --amp
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `--data-root DIR...` | Directories searched for case folders. | Include multiple roots for combined validation sets. |
-| `--dataset-json PATH` | Defines case IDs and modality order (from nnU-Net Step&nbsp;1). | Swap if you maintain multiple dataset IDs. |
-| `--fold {index,all}` | Controls checkpoint path templating. | Use `all` with `{fold}` placeholders to iterate automatically. |
-| `--checkpoint PATH` | Stage 1 or Stage 2 weights to load. | Point to different epochs or experiments. |
-| `--output-dir PATH` | Where predictions land. | Separate per fold or augmentation. |
-| `--spacing`, `--patch-size`, `--roi-size`, `--sw-batch-size`, `--sw-overlap` | Control resampling and sliding-window inference. | Align with training settings or adjust for memory. |
-| `--run-evaluation` | Automatically call Step&nbsp;4 upon completion. | Omit when you plan to evaluate later. |
-| `--ground-truth`, `--evaluation-output` | Only required when `--run-evaluation` is active. | Point to labels and report directories. |
-| `--amp` | Mixed-precision inference. | Disable on mismatched GPU drivers. |
+- `--data-root DIR...`: directories searched for case folders; include multiple roots when combining validation sets.
+- `--dataset-json PATH`: defines case IDs and modality order (from nnU-Net Step&nbsp;1); switch files if you maintain multiple dataset IDs.
+- `--fold {index,all}`: controls checkpoint path templating; use `all` with `{fold}` placeholders to iterate automatically.
+- `--checkpoint PATH`: stage 1 or stage 2 weights to load; point to alternate epochs or experiments as needed.
+- `--output-dir PATH`: destination for predictions; separate per fold or augmentation strategy.
+- `--spacing`, `--patch-size`, `--roi-size`, `--sw-batch-size`, `--sw-overlap`: govern resampling and sliding-window inference; keep them aligned with training settings or adjust for memory constraints.
+- `--run-evaluation`: automatically triggers Step&nbsp;4 upon completion; omit it if you prefer to evaluate later.
+- `--ground-truth`, `--evaluation-output`: required only when `--run-evaluation` is active; direct them to the label source and report directory.
+- `--amp`: mixed-precision inference; disable on systems with mismatched GPU drivers.
 
 #### Step 4 – Aggregate metrics (`scripts/run_full_evaluation.py` or inline evaluation)
 
@@ -574,13 +586,11 @@ python scripts/run_full_evaluation.py `
     --pretty
 ```
 
-| Option | Description | When to adjust |
-|--------|-------------|----------------|
-| `ground_truth` | Directory of reference segmentations. | Swap to `training_data` labels for fold-specific validation. |
-| `predictions` | Directory containing MONAI outputs. | Point to alternate experiment folders. |
-| `--output-dir PATH` | Report location. | Separate per fold or seed. |
-| `--labels`, `--omit-aggregates` | Same semantics as Step&nbsp;5 in nnU-Net loop. | Restrict evaluation scope when comparing partial label sets. |
-| `--skip-nnunet` | Avoids calling nnU-Net CLI (MONAI-only metrics). | Use if nnU-Net executables are unavailable. |
+- `ground_truth`: directory of reference segmentations; switch to `training_data` labels for fold-specific validation.
+- `predictions`: directory containing MONAI outputs; point to alternate experiment folders when comparing runs.
+- `--output-dir PATH`: report location; create separate directories per fold or random seed.
+- `--labels`, `--omit-aggregates`: identical semantics to Step&nbsp;5 in the nnU-Net loop; narrow the evaluation scope for partial label comparisons.
+- `--skip-nnunet`: avoids calling the nnU-Net CLI so you can compute MONAI-only metrics when the executables are unavailable.
 
 #### Step 5 – Visual QA (optional)
 
@@ -588,6 +598,9 @@ python scripts/run_full_evaluation.py `
 - Create presentation assets with `python scripts/visualize_volumes.py --mode static ...` or `--mode gif`.
 
 Following these two workflows keeps nnU-Net and MONAI results aligned, enabling apples-to-apples comparisons and rapid iteration on BraTS post-treatment experiments.
+- Generate predictions (`nnUNetv2_predict ...`).
+- Evaluate directly using `run_full_evaluation.py` to unify nnU-Net metrics and lesion-wise analysis.
+- Visualize cases or statistics using the viewer scripts as needed.
 
 ### 4.3 Visualization and QA sprint
 
@@ -599,13 +612,21 @@ Following these two workflows keeps nnU-Net and MONAI results aligned, enabling 
 
 ## 5. Troubleshooting cheat sheet
 
-| Symptom | Likely cause | Fix |
-|---------|--------------|-----|
-| `FileNotFoundError` for modalities/segmentations | Dataset directory missing expected files | Re-stage the offending case; ensure exact naming (`Case-Modality.nii.gz`). |
-| `Could not locate 'nnUNetv2_evaluate_simple' on PATH` | nnU-Net environment inactive | Activate `.venv_nnunet` or adjust `PATH`; optionally pass `--skip-nnunet`. |
-| `Missing segmentation but test labels were requested` | `--require-test-labels` with incomplete test set | Provide the missing `-seg` files or drop `--require-test-labels`. |
-| CUDA not detected in MONAI scripts | Wrong environment / driver mismatch | Confirm `.venv_monai` activation, reinstall CUDA 12.4 wheel, check GPU availability script from `docs/MONAI_guide.md`. |
-| Dash apps show empty dataset lists | Wrong `--data-root` or permissions | Verify roots exist and are accessible; defaults expect `training_data*` folders in repo root. |
+- **Symptom:** `FileNotFoundError` for modalities or segmentations
+    - Likely cause: dataset directory is missing the expected files.
+    - Fix: re-stage the offending case and ensure file naming matches `Case-Modality.nii.gz` exactly.
+- **Symptom:** `Could not locate 'nnUNetv2_evaluate_simple' on PATH`
+    - Likely cause: the nnU-Net environment isn’t active.
+    - Fix: activate `.venv_nnunet` or adjust `PATH`; as a fallback, run evaluation with `--skip-nnunet`.
+- **Symptom:** “Missing segmentation but test labels were requested”
+    - Likely cause: `--require-test-labels` is set while the test set is incomplete.
+    - Fix: provide the missing `-seg` files or remove the `--require-test-labels` guard.
+- **Symptom:** CUDA not detected in MONAI scripts
+    - Likely cause: wrong environment or GPU driver mismatch.
+    - Fix: confirm `.venv_monai` is active, reinstall the CUDA 12.4 wheel if needed, and run the GPU availability helper in `docs/MONAI_guide.md`.
+- **Symptom:** Dash apps show empty dataset lists
+    - Likely cause: incorrect `--data-root` or permission issues.
+    - Fix: verify the roots exist and are readable; the defaults expect `training_data*` folders in the repository root.
 
 ---
 
