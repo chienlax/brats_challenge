@@ -450,7 +450,7 @@ nnUNetv2_plan_and_preprocess -d 501 --verify_dataset_integrity --no_preprocessin
 
 ```powershell
 .\.venv_nnunet\Scripts\Activate.ps1
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz --device cuda --continue_training False
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz --device cuda
 ```
 
 - `Dataset501_BraTSPostTx`: dataset ID; align with any custom ID you used during preparation.
@@ -532,11 +532,29 @@ python scripts/prepare_nnunet_dataset.py `
 python scripts/train_monai_finetune.py `
     --data-root training_data training_data_additional `
     --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
-    --fold all `
+    --fold 0 `
     --output-root outputs/monai_ft_nnunet_aligned `
-    --stage1-epochs 40 `
-    --stage2-epochs 120 `
+    --stage1-epochs 20 `
+    --stage2-epochs 30 `
     --amp
+```
+
+```powershell
+.\.venv_monai\Scripts\Activate.ps1
+python scripts/train_monai_finetune.py `
+    --data-root training_data `
+    --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
+    --fold 0 `
+    --output-root outputs/monai_ft_continued `
+    --stage1-epochs 20 `
+    --stage2-epochs 30 `
+    --batch-size 3 `
+    --stage1-accum 4 `
+    --stage2-accum 4 `
+    --save-checkpoint-frequency 5 `
+    --amp `
+    --cache-rate 0.3 `
+    --load-weights outputs/monai_ft/fold0/checkpoints/stage2_epoch30.pt
 ```
 
 - `--data-root DIR...`: BraTS roots containing modalities plus `-seg`; add more roots when you want to enlarge the training data.

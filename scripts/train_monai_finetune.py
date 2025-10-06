@@ -141,14 +141,14 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--stage1-epochs",
         type=int,
-        default=80,
-        help="Number of epochs for the decoder/head warm-up stage (default: 80).",
+        default=30,
+        help="Number of epochs for the decoder/head warm-up stage (default: 30).",
     )
     parser.add_argument(
         "--stage2-epochs",
         type=int,
-        default=140,
-        help="Number of epochs for the end-to-end fine-tuning stage (default: 140).",
+        default=50,
+        help="Number of epochs for the end-to-end fine-tuning stage (default: 50).",
     )
     parser.add_argument(
         "--stage1-lr",
@@ -177,7 +177,7 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--stage2-accum",
         type=int,
-        default=2,
+        default=3,
         help="Gradient accumulation steps during Stage 2 (default: 2).",
     )
     parser.add_argument(
@@ -195,8 +195,8 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=4,
-        help="Number of worker processes for the DataLoader (default: 4).",
+        default=10,
+        help="Number of worker processes for the DataLoader (default: 10).",
     )
     parser.add_argument(
         "--cache-rate",
@@ -254,6 +254,12 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         help="Optional checkpoint path to resume training.",
     )
     parser.add_argument(
+        "--load-weights",
+        type=Path,
+        help="Path to a checkpoint file to load initial model weights from. "
+             "Unlike --resume, this only loads the weights and starts a fresh training run.",
+    )
+    parser.add_argument(
         "--encoder-prefix",
         type=str,
         nargs="*",
@@ -300,7 +306,7 @@ def set_determinism(seed: int) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.benchmark = True
 
 
 def load_splits(split_json: Path, fold: int) -> Tuple[List[str], List[str]]:
@@ -669,6 +675,11 @@ def run_fold(fold: int, args: argparse.Namespace):
     output_root = args.output_root / f"fold{fold}"
     print(f"\n{'='*80}\nRunning training for fold {fold}\nOutputs will be saved to: {output_root}\n{'='*80}")
 
+    if args.resume and args.load_weights:
+        raise ValueError("Cannot use --resume and --load-weights simultaneously. "
+                         "Use --load-weights to start a new run with pre-trained weights, or "
+                         "--resume to continue an interrupted run.")
+
     set_determinism(args.seed + fold)  # Use different seed for each fold
 
     train_ids, val_ids = load_splits(args.split_json, fold)
@@ -688,7 +699,7 @@ def run_fold(fold: int, args: argparse.Namespace):
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        persistent_workers=False,
+        persistent_workers=True if args.num_workers > 0 else False,
         collate_fn=train_collate_fn,
     )
     val_loader = DataLoader(
@@ -705,67 +716,88 @@ def run_fold(fold: int, args: argparse.Namespace):
     model = replace_output_head(model, NUM_OUTPUT_CHANNELS)
     model.to(device)
 
+    # --- HANDLE --load-weights: Load initial weights BEFORE anything else ---
+    if args.load_weights:
+        if not args.load_weights.exists():
+            raise FileNotFoundError(f"Weights file not found: {args.load_weights}")
+        print(f"Loading initial model weights from: {args.load_weights}")
+        checkpoint = torch.load(args.load_weights, map_location="cpu")
+        
+        model_state_dict = checkpoint.get("model")
+        if model_state_dict is None:
+            raise KeyError(f"Checkpoint {args.load_weights} does not contain a 'model' key.")
+        
+        model.load_state_dict(model_state_dict)
+        print("Successfully loaded initial weights for a fresh training run.")
+    
     stage1_cfg, stage2_cfg = stage_config_from_args(args)
     loss_fn = create_loss(args.class_weights, device)
-
     history: List[MutableMapping[str, object]] = []
     dirs = ensure_meta_dirs(output_root)
-
     scaler = GradScaler(enabled=args.amp)
 
-    # Stage 1: freeze encoder
-    print("\n--- Stage 1: decoder/head fine-tuning ---")
+    # --- SETUP FOR TRAINING STAGES & RESUMING ---
+    start_epoch_s1, start_epoch_s2 = 0, 0
+    best_stage1, best_stage2 = -math.inf, -math.inf
+    
+    # Create both optimizers upfront; their state will be loaded by --resume if provided.
     set_encoder_trainable(model, args.encoder_prefix, trainable=False)
-    optimizer = create_optimizer(model, stage1_cfg)
-    start_epoch = 0
-    best_stage1 = -math.inf
+    optimizer1 = create_optimizer(model, stage1_cfg)
+    set_encoder_trainable(model, args.encoder_prefix, trainable=True)
+    optimizer2 = create_optimizer(model, stage2_cfg)
 
+    # --- HANDLE --resume: This logic restores the full training state to continue an interrupted run ---
     if args.resume:
-        print(f"Resuming from checkpoint: {args.resume}")
-        last_epoch, best_metric, previous_stage = load_checkpoint(model, optimizer, scaler, args.resume)
-        if previous_stage != "stage1":
-            raise RuntimeError("Resume checkpoint belongs to a different stage. Use stage-specific checkpoints.")
-        start_epoch = last_epoch + 1
-        best_stage1 = best_metric
+        print(f"Resuming interrupted run from checkpoint: {args.resume}")
+        ckpt_data = torch.load(args.resume, map_location="cpu")
+        previous_stage = str(ckpt_data.get("stage", "stage1"))
 
-    for epoch in range(start_epoch, stage1_cfg.epochs):
-        epoch_start = time.time()
-        train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, scaler, stage1_cfg, device, args.amp)
-        log: MutableMapping[str, object] = {"epoch": epoch, "stage": "stage1", "train_loss": train_loss}
+        if previous_stage == "stage1":
+            print("Checkpoint is from Stage 1. Resuming training in Stage 1.")
+            start_epoch_s1, best_stage1, _ = load_checkpoint(model, optimizer1, scaler, args.resume)
+            start_epoch_s1 += 1  # Start the next epoch
+        elif previous_stage == "stage2":
+            print("Checkpoint is from Stage 2. Skipping Stage 1 and resuming training in Stage 2.")
+            start_epoch_s2, best_stage2, _ = load_checkpoint(model, optimizer2, scaler, args.resume)
+            start_epoch_s2 += 1  # Start the next epoch
+            start_epoch_s1 = stage1_cfg.epochs  # Set this to skip the Stage 1 loop
+        else:
+            raise ValueError(f"Unknown stage '{previous_stage}' in checkpoint.")
 
-        if (epoch + 1) % args.val_interval == 0:
-            metrics = validate(model, val_loader, device, args.amp, args.eval_roi, args.sw_batch_size, args.sw_overlap)
-            log.update(metrics)
-            if metrics["dice_mean"] > best_stage1:
-                best_stage1 = metrics["dice_mean"]
-                ckpt_path = save_checkpoint(model, optimizer, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], "stage1_best.pt")
-                print(f"  > Stage1 best improved to {best_stage1:.4f} (checkpoint: {ckpt_path.name})")
+    # --- STAGE 1 TRAINING LOOP ---
+    # This loop is automatically skipped if start_epoch_s1 was set by resuming from a stage 2 checkpoint.
+    if start_epoch_s1 < stage1_cfg.epochs:
+        print("\n--- Stage 1: decoder/head fine-tuning ---")
+        set_encoder_trainable(model, args.encoder_prefix, trainable=False)
 
-        if (epoch + 1) % args.save_checkpoint_frequency == 0:
-            ckpt_path = save_checkpoint(model, optimizer, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], f"stage1_epoch{epoch+1}.pt")
-            print(f"  > Saved checkpoint {ckpt_path.name}")
+        for epoch in range(start_epoch_s1, stage1_cfg.epochs):
+            epoch_start = time.time()
+            train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer1, scaler, stage1_cfg, device, args.amp)
+            log: MutableMapping[str, object] = {"epoch": epoch, "stage": "stage1", "train_loss": train_loss}
 
-        log["epoch_seconds"] = time.time() - epoch_start
-        history.append(log)
-        print(f"Epoch {epoch+1}/{stage1_cfg.epochs} | loss={train_loss:.4f}")
+            if (epoch + 1) % args.val_interval == 0:
+                metrics = validate(model, val_loader, device, args.amp, args.eval_roi, args.sw_batch_size, args.sw_overlap)
+                log.update(metrics)
+                if metrics["dice_mean"] > best_stage1:
+                    best_stage1 = metrics["dice_mean"]
+                    ckpt_path = save_checkpoint(model, optimizer1, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], "stage1_best.pt")
+                    print(f"  > Stage1 best improved to {best_stage1:.4f} (checkpoint: {ckpt_path.name})")
+            
+            if (epoch + 1) % args.save_checkpoint_frequency == 0:
+                ckpt_path = save_checkpoint(model, optimizer1, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], f"stage1_epoch{epoch+1}.pt")
+                print(f"  > Saved checkpoint {ckpt_path.name}")
 
-    # Stage 2: unfreeze encoder
+            log["epoch_seconds"] = time.time() - epoch_start
+            history.append(log)
+            print(f"Epoch {epoch+1}/{stage1_cfg.epochs} | loss={train_loss:.4f}")
+
+    # --- STAGE 2 TRAINING LOOP ---
     print("\n--- Stage 2: end-to-end fine-tuning ---")
     set_encoder_trainable(model, args.encoder_prefix, trainable=True)
-    optimizer = create_optimizer(model, stage2_cfg)
-    best_stage2 = -math.inf
 
-    start_epoch = 0
-    if args.resume and args.resume.name.startswith("stage2"):
-        last_epoch, best_metric, previous_stage = load_checkpoint(model, optimizer, scaler, args.resume)
-        if previous_stage != "stage2":
-            raise RuntimeError("Resume checkpoint belongs to a different stage. Use stage-specific checkpoints.")
-        start_epoch = last_epoch + 1
-        best_stage2 = best_metric
-
-    for epoch in range(start_epoch, stage2_cfg.epochs):
+    for epoch in range(start_epoch_s2, stage2_cfg.epochs):
         epoch_start = time.time()
-        train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, scaler, stage2_cfg, device, args.amp)
+        train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer2, scaler, stage2_cfg, device, args.amp)
         log = {"epoch": epoch, "stage": "stage2", "train_loss": train_loss}
 
         if (epoch + 1) % args.val_interval == 0:
@@ -773,11 +805,11 @@ def run_fold(fold: int, args: argparse.Namespace):
             log.update(metrics)
             if metrics["dice_mean"] > best_stage2:
                 best_stage2 = metrics["dice_mean"]
-                ckpt_path = save_checkpoint(model, optimizer, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], "stage2_best.pt")
+                ckpt_path = save_checkpoint(model, optimizer2, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], "stage2_best.pt")
                 print(f"  > Stage2 best improved to {best_stage2:.4f} (checkpoint: {ckpt_path.name})")
-
+        
         if (epoch + 1) % args.save_checkpoint_frequency == 0:
-            ckpt_path = save_checkpoint(model, optimizer, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], f"stage2_epoch{epoch+1}.pt")
+            ckpt_path = save_checkpoint(model, optimizer2, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], f"stage2_epoch{epoch+1}.pt")
             print(f"  > Saved checkpoint {ckpt_path.name}")
 
         log["epoch_seconds"] = time.time() - epoch_start
@@ -788,7 +820,6 @@ def run_fold(fold: int, args: argparse.Namespace):
     with metrics_path.open("w", encoding="utf-8") as handle:
         json.dump(history, handle, indent=2)
     print(f"Training for fold {fold} complete. Logs written to {metrics_path}")
-
 
 def main(argv: Iterable[str] | None = None) -> None:
     args = parse_args(argv)
