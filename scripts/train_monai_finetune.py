@@ -12,8 +12,7 @@ The training pipeline mirrors nnU-Net v2 preprocessing and augmentation choices:
 - Orientation is normalised to RAS and volumes are resampled to 1 mm isotropic.
 - Modalities are Z-score normalised over the foreground voxels.
 - Training crops use a patch size of 128x128x128 and positive/negative sampling.
-- Augmentations include flips, affine jitter, histogram shifts, bias fields,
-  Gaussian smoothing, coarse dropout, and low-resolution simulation.
+- Augmentations have been reduced to lower computational load.
 
 The script expects MONAI and huggingface-hub to be installed in the active environment.
 It will download the model bundle from Hugging Face on its first run into an `artifacts`
@@ -31,7 +30,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -88,7 +87,7 @@ def _default_device() -> torch.device:
 # Modality order aligned with nnU-Net V2 dataset.json for Dataset501_BraTSPostTx
 # 0: T2 FLAIR, 1: T1-pre, 2: T1-post, 3: T2
 MODALITIES: Tuple[str, ...] = ("t2f", "t1n", "t1c", "t2w")
-NUM_OUTPUT_CHANNELS = 5  # BG + NETC + ET + SNFH + RC
+NUM_OUTPUT_CHANNELS = 5  # BG + ET + NETC + SNFH + RC
 
 
 @dataclass
@@ -245,8 +244,8 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
         "--class-weights",
         type=float,
         nargs=NUM_OUTPUT_CHANNELS,
-        default=(0.5, 1.0, 1.0, 1.0, 1.5),
-        help=f"Class weights (BG, ET, NETC, SNFH, RC) for the DiceCE loss. Expects {NUM_OUTPUT_CHANNELS} values.",
+        default=[0.5, 20.0, 1.0, 4.0, 2.5],
+        help=f"Class weights (BG, ET, NETC, SNFH, RC) for DiceCE loss. Default is an inverse-frequency based heuristic.",
     )
     parser.add_argument(
         "--resume",
@@ -269,7 +268,7 @@ def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--head-key",
         type=str,
-        default="output_layer",
+        default="seg_layers",
         help="Attribute name of the model's final convolutional layer (used when replacing the head).",
     )
     parser.add_argument(
@@ -387,26 +386,27 @@ def prepare_datasets(
             RandFlipd(keys=["image", "label"], spatial_axis=[0], prob=0.5),
             RandFlipd(keys=["image", "label"], spatial_axis=[1], prob=0.5),
             RandFlipd(keys=["image", "label"], spatial_axis=[2], prob=0.5),
-            RandAffined(
-                keys=["image", "label"],
-                rotate_range=(math.radians(30), math.radians(30), math.radians(30)),
-                scale_range=(0.1, 0.1, 0.1),
-                mode=("bilinear", "nearest"),
-                prob=0.4,
-            ),
+            # --- Computationally expensive augmentations removed for faster training ---
+            # RandAffined(
+            #     keys=["image", "label"],
+            #     rotate_range=(math.radians(30), math.radians(30), math.radians(30)),
+            #     scale_range=(0.1, 0.1, 0.1),
+            #     mode=("bilinear", "nearest"),
+            #     prob=0.4,
+            # ),
+            # RandBiasFieldd(keys="image", prob=0.1, coeff_range=(0.02, 0.07)),
+            # RandZoomd(
+            #     keys=["image", "label"],
+            #     min_zoom=0.7,
+            #     max_zoom=1.3,
+            #     mode=("trilinear", "nearest"),
+            #     prob=0.2,
+            #     keep_size=True,
+            # ),
             RandGaussianNoised(keys="image", prob=0.1, mean=0.0, std=0.05),
-            RandBiasFieldd(keys="image", prob=0.1, coeff_range=(0.02, 0.07)),
             RandAdjustContrastd(keys="image", prob=0.2, gamma=(0.7, 1.5)),
             RandHistogramShiftd(keys="image", prob=0.2, num_control_points=10),
             RandGaussianSmoothd(keys="image", sigma_x=(0.3, 1.2), sigma_y=(0.3, 1.2), sigma_z=(0.3, 1.2), prob=0.15),
-            RandZoomd(
-                keys=["image", "label"],
-                min_zoom=0.7,
-                max_zoom=1.3,
-                mode=("trilinear", "nearest"),
-                prob=0.2,
-                keep_size=True,
-            ),
             RandCoarseDropoutd(
                 keys="image",
                 holes=1,
@@ -431,7 +431,6 @@ def prepare_datasets(
 
 
 def train_collate_fn(batch: List[List[Mapping[str, torch.Tensor]]]) -> Mapping[str, torch.Tensor]:
-    # Unpack the inner list since RandCropByPosNegLabeld returns a list of dicts
     batch = [item[0] for item in batch]
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.stack([item["label"] for item in batch], dim=0)
@@ -440,7 +439,6 @@ def train_collate_fn(batch: List[List[Mapping[str, torch.Tensor]]]) -> Mapping[s
 
 
 def val_collate_fn(batch: List[Mapping[str, torch.Tensor]]) -> Mapping[str, torch.Tensor]:
-    # Validation data is not wrapped in an extra list
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.stack([item["label"] for item in batch], dim=0)
     meta = {key: [item[key] for item in batch] for key in batch[0] if key not in {"image", "label"}}
@@ -448,9 +446,14 @@ def val_collate_fn(batch: List[Mapping[str, torch.Tensor]]) -> Mapping[str, torc
 
 
 def initialise_model(
-    bundle_name: str, artifacts_dir: Path, device: torch.device, bundle_dir: Path | None = None
+    bundle_name: str,
+    artifacts_dir: Path,
+    device: torch.device,
+    head_key: str,
+    new_out_channels: int,
+    bundle_dir: Path | None = None,
 ) -> nn.Module:
-    """Initialises model, downloading from Hugging Face if not present."""
+    """Initialises model and replaces the output head, handling nested modules and direct model returns."""
     local_bundle_path = bundle_dir
     if local_bundle_path is None:
         local_bundle_path = artifacts_dir / bundle_name
@@ -461,49 +464,66 @@ def initialise_model(
             snapshot_download(repo_id=repo_id, local_dir=local_bundle_path, repo_type="model")
 
     print(f"Loading MONAI bundle from: {local_bundle_path}")
-    components = bundle_load(name=bundle_name, bundle_dir=local_bundle_path)
+    loaded_bundle = bundle_load(name=bundle_name, bundle_dir=local_bundle_path)
 
-    if isinstance(components, nn.Module):
-        network = components
-    else:
-        network = components.get("network")
-        if network is None:
-            raise RuntimeError(f"Failed to load network from MONAI bundle '{bundle_name}'.")
-        state_dict = components.get("state_dict") or components.get("model")
-        if state_dict:
-            network.load_state_dict(state_dict)
+    # Robustly handle direct model return vs. dictionary of components
+    network = None
+    state_dict = None
+    if isinstance(loaded_bundle, dict):
+        network = loaded_bundle.get("network")
+        state_dict = loaded_bundle.get("state_dict") or loaded_bundle.get("model")
+    elif isinstance(loaded_bundle, nn.Module):
+        network = loaded_bundle
 
+    if network is None:
+        raise RuntimeError(f"Failed to load network from MONAI bundle '{bundle_name}'.")
+    if state_dict:
+        network.load_state_dict(state_dict)
+
+    # Replace the output head
+    try:
+        head_module = getattr(network, head_key)
+        
+        final_conv = None
+        if isinstance(head_module, nn.Conv3d):
+            final_conv = head_module
+        elif isinstance(head_module, nn.Sequential):
+            for layer in reversed(head_module):
+                if isinstance(layer, nn.Conv3d):
+                    final_conv = layer
+                    break
+        
+        if final_conv is None:
+            raise TypeError(f"Could not find a Conv3d layer within attribute '{head_key}'.")
+
+        new_conv = nn.Conv3d(
+            in_channels=final_conv.in_channels,
+            out_channels=new_out_channels,
+            kernel_size=final_conv.kernel_size,
+            stride=final_conv.stride,
+            padding=final_conv.padding,
+            dilation=final_conv.dilation,
+            groups=final_conv.groups,
+            bias=final_conv.bias is not None,
+        )
+        nn.init.kaiming_normal_(new_conv.weight, mode="fan_out", nonlinearity="relu")
+        if new_conv.bias is not None:
+            nn.init.zeros_(new_conv.bias)
+
+        if isinstance(head_module, nn.Conv3d):
+            setattr(network, head_key, new_conv)
+        elif isinstance(head_module, nn.Sequential):
+            for i, layer in enumerate(head_module):
+                if layer is final_conv:
+                    head_module[i] = new_conv
+                    break
+        
+        print(f"Replaced model head within attribute '{head_key}' for {new_out_channels} classes.")
+    except AttributeError:
+        raise RuntimeError(f"Could not find attribute '{head_key}' in model to replace the head.")
+    
     network.to(device)
     return network
-
-
-def replace_output_head(model: nn.Module, new_out_channels: int) -> nn.Module:
-    def _replace(module: nn.Module) -> bool:
-        for name, child in reversed(list(module.named_children())):
-            if isinstance(child, nn.Conv3d):
-                new_conv = nn.Conv3d(
-                    in_channels=child.in_channels,
-                    out_channels=new_out_channels,
-                    kernel_size=child.kernel_size,
-                    stride=child.stride,
-                    padding=child.padding,
-                    dilation=child.dilation,
-                    groups=child.groups,
-                    bias=child.bias is not None,
-                )
-                nn.init.kaiming_normal_(new_conv.weight, mode="fan_out", nonlinearity="relu")
-                if new_conv.bias is not None:
-                    nn.init.zeros_(new_conv.bias)
-                setattr(module, name, new_conv)
-                return True
-            if _replace(child):
-                return True
-        return False
-
-    if not _replace(model):
-        raise RuntimeError("Could not locate the final Conv3d layer to replace.")
-    return model
-
 
 def set_encoder_trainable(model: nn.Module, encoder_prefixes: Sequence[str], trainable: bool) -> None:
     for name, param in model.named_parameters():
@@ -613,7 +633,6 @@ def validate(
                     overlap=overlap,
                     mode="gaussian",
                 )
-            # Convert MetaTensors to plain Tensors before decollating to avoid metadata iteration error
             preds = [post_pred(tensor)[:, 1:] for tensor in decollate_batch(logits.as_tensor())]
             gts = [post_label(tensor)[:, 1:] for tensor in decollate_batch(labels.as_tensor())]
             dice_metric(y_pred=preds, y=gts)
@@ -621,6 +640,8 @@ def validate(
     dice = dice_metric.aggregate().cpu().numpy()
     dice_metric.reset()
 
+    # Map dice scores to class names (ET, NETC, SNFH, RC)
+    # The order depends on the label mapping, assuming 1=ET, 2=NETC, 3=SNFH, 4=RC
     metrics = {"dice_ET": float(dice[0]), "dice_NETC": float(dice[1]), "dice_SNFH": float(dice[2]), "dice_RC": float(dice[3])}
     metrics["dice_mean"] = float(np.mean(dice))
     return metrics
@@ -650,14 +671,6 @@ def save_checkpoint(
     return path
 
 
-def load_checkpoint(model: nn.Module, optimizer: torch.optim.Optimizer, scaler: GradScaler, checkpoint_path: Path) -> Tuple[int, float, str]:
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    model.load_state_dict(checkpoint["model"])
-    optimizer.load_state_dict(checkpoint["optimizer"])
-    scaler.load_state_dict(checkpoint["scaler"])
-    return int(checkpoint.get("epoch", 0)), float(checkpoint.get("best_metric", -math.inf)), str(checkpoint.get("stage", "stage1"))
-
-
 def ensure_meta_dirs(output_root: Path) -> Mapping[str, Path]:
     dirs = {
         "checkpoints": output_root / "checkpoints",
@@ -676,11 +689,9 @@ def run_fold(fold: int, args: argparse.Namespace):
     print(f"\n{'='*80}\nRunning training for fold {fold}\nOutputs will be saved to: {output_root}\n{'='*80}")
 
     if args.resume and args.load_weights:
-        raise ValueError("Cannot use --resume and --load-weights simultaneously. "
-                         "Use --load-weights to start a new run with pre-trained weights, or "
-                         "--resume to continue an interrupted run.")
+        raise ValueError("Cannot use --resume and --load-weights simultaneously.")
 
-    set_determinism(args.seed + fold)  # Use different seed for each fold
+    set_determinism(args.seed + fold)
 
     train_ids, val_ids = load_splits(args.split_json, fold)
     index = build_case_index(args.data_root)
@@ -699,7 +710,7 @@ def run_fold(fold: int, args: argparse.Namespace):
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
-        persistent_workers=True if args.num_workers > 0 else False,
+        persistent_workers=args.num_workers > 0,
         collate_fn=train_collate_fn,
     )
     val_loader = DataLoader(
@@ -708,71 +719,60 @@ def run_fold(fold: int, args: argparse.Namespace):
         shuffle=False,
         num_workers=0,
         pin_memory=True,
-        persistent_workers=False,
         collate_fn=val_collate_fn,
     )
 
-    model = initialise_model(args.bundle_name, args.artifacts_dir, device, args.bundle_dir)
-    model = replace_output_head(model, NUM_OUTPUT_CHANNELS)
-    model.to(device)
+    model = initialise_model(
+        args.bundle_name,
+        args.artifacts_dir,
+        device,
+        args.head_key,
+        NUM_OUTPUT_CHANNELS,
+        args.bundle_dir,
+    )
 
-    # --- HANDLE --load-weights: Load initial weights BEFORE anything else ---
     if args.load_weights:
         if not args.load_weights.exists():
             raise FileNotFoundError(f"Weights file not found: {args.load_weights}")
         print(f"Loading initial model weights from: {args.load_weights}")
-        checkpoint = torch.load(args.load_weights, map_location="cpu")
-        
-        model_state_dict = checkpoint.get("model")
-        if model_state_dict is None:
-            raise KeyError(f"Checkpoint {args.load_weights} does not contain a 'model' key.")
-        
-        model.load_state_dict(model_state_dict)
-        print("Successfully loaded initial weights for a fresh training run.")
-    
+        ckpt = torch.load(args.load_weights, map_location="cpu")
+        model.load_state_dict(ckpt["model"])
+
     stage1_cfg, stage2_cfg = stage_config_from_args(args)
     loss_fn = create_loss(args.class_weights, device)
     history: List[MutableMapping[str, object]] = []
     dirs = ensure_meta_dirs(output_root)
     scaler = GradScaler(enabled=args.amp)
+    optimizer: torch.optim.Optimizer
 
-    # --- SETUP FOR TRAINING STAGES & RESUMING ---
     start_epoch_s1, start_epoch_s2 = 0, 0
     best_stage1, best_stage2 = -math.inf, -math.inf
-    
-    # Create both optimizers upfront; their state will be loaded by --resume if provided.
-    set_encoder_trainable(model, args.encoder_prefix, trainable=False)
-    optimizer1 = create_optimizer(model, stage1_cfg)
-    set_encoder_trainable(model, args.encoder_prefix, trainable=True)
-    optimizer2 = create_optimizer(model, stage2_cfg)
 
-    # --- HANDLE --resume: This logic restores the full training state to continue an interrupted run ---
     if args.resume:
         print(f"Resuming interrupted run from checkpoint: {args.resume}")
-        ckpt_data = torch.load(args.resume, map_location="cpu")
-        previous_stage = str(ckpt_data.get("stage", "stage1"))
+        ckpt = torch.load(args.resume, map_location="cpu")
+        model.load_state_dict(ckpt["model"])
+        scaler.load_state_dict(ckpt["scaler"])
+        stage = ckpt.get("stage", "stage1")
 
-        if previous_stage == "stage1":
-            print("Checkpoint is from Stage 1. Resuming training in Stage 1.")
-            start_epoch_s1, best_stage1, _ = load_checkpoint(model, optimizer1, scaler, args.resume)
-            start_epoch_s1 += 1  # Start the next epoch
-        elif previous_stage == "stage2":
-            print("Checkpoint is from Stage 2. Skipping Stage 1 and resuming training in Stage 2.")
-            start_epoch_s2, best_stage2, _ = load_checkpoint(model, optimizer2, scaler, args.resume)
-            start_epoch_s2 += 1  # Start the next epoch
-            start_epoch_s1 = stage1_cfg.epochs  # Set this to skip the Stage 1 loop
-        else:
-            raise ValueError(f"Unknown stage '{previous_stage}' in checkpoint.")
+        if stage == "stage1":
+            start_epoch_s1 = int(ckpt.get("epoch", 0)) + 1
+            best_stage1 = float(ckpt.get("best_metric", -math.inf))
+        elif stage == "stage2":
+            start_epoch_s1 = stage1_cfg.epochs  # Skip stage 1
+            start_epoch_s2 = int(ckpt.get("epoch", 0)) + 1
+            best_stage2 = float(ckpt.get("best_metric", -math.inf))
 
-    # --- STAGE 1 TRAINING LOOP ---
-    # This loop is automatically skipped if start_epoch_s1 was set by resuming from a stage 2 checkpoint.
     if start_epoch_s1 < stage1_cfg.epochs:
         print("\n--- Stage 1: decoder/head fine-tuning ---")
         set_encoder_trainable(model, args.encoder_prefix, trainable=False)
+        optimizer = create_optimizer(model, stage1_cfg)
+        if args.resume and ckpt.get("stage") == "stage1":
+            optimizer.load_state_dict(ckpt["optimizer"])
 
         for epoch in range(start_epoch_s1, stage1_cfg.epochs):
             epoch_start = time.time()
-            train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer1, scaler, stage1_cfg, device, args.amp)
+            train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, scaler, stage1_cfg, device, args.amp)
             log: MutableMapping[str, object] = {"epoch": epoch, "stage": "stage1", "train_loss": train_loss}
 
             if (epoch + 1) % args.val_interval == 0:
@@ -780,24 +780,35 @@ def run_fold(fold: int, args: argparse.Namespace):
                 log.update(metrics)
                 if metrics["dice_mean"] > best_stage1:
                     best_stage1 = metrics["dice_mean"]
-                    ckpt_path = save_checkpoint(model, optimizer1, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], "stage1_best.pt")
-                    print(f"  > Stage1 best improved to {best_stage1:.4f} (checkpoint: {ckpt_path.name})")
-            
+                    save_checkpoint(model, optimizer, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], "stage1_best.pt")
+                    print(f"  > Stage1 best improved to {best_stage1:.4f}")
+
             if (epoch + 1) % args.save_checkpoint_frequency == 0:
-                ckpt_path = save_checkpoint(model, optimizer1, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], f"stage1_epoch{epoch+1}.pt")
-                print(f"  > Saved checkpoint {ckpt_path.name}")
+                save_checkpoint(model, optimizer, scaler, epoch, "stage1", best_stage1, dirs["checkpoints"], f"stage1_epoch{epoch+1}.pt")
 
             log["epoch_seconds"] = time.time() - epoch_start
             history.append(log)
-            print(f"Epoch {epoch+1}/{stage1_cfg.epochs} | loss={train_loss:.4f}")
+            print(f"Epoch {epoch+1}/{stage1_cfg.epochs} | loss={train_loss:.4f} | dice_mean={log.get('dice_mean', 'N/A')}")
 
-    # --- STAGE 2 TRAINING LOOP ---
     print("\n--- Stage 2: end-to-end fine-tuning ---")
     set_encoder_trainable(model, args.encoder_prefix, trainable=True)
 
+    if 'optimizer' not in locals() or args.resume and ckpt.get("stage") == "stage2":
+        # Optimizer needs to be created for stage 2, either from scratch or for resuming
+        optimizer = create_optimizer(model, stage2_cfg)
+        if args.resume and ckpt.get("stage") == "stage2":
+            optimizer.load_state_dict(ckpt["optimizer"])
+    else:
+        # Reconfigure the existing optimizer from stage 1
+        print("Reconfiguring optimizer for Stage 2: adding encoder params and updating LR.")
+        optimizer.param_groups.clear()
+        optimizer.add_param_group({"params": model.parameters()})
+        optimizer.param_groups[0]['lr'] = stage2_cfg.learning_rate
+        optimizer.param_groups[0]['weight_decay'] = stage2_cfg.weight_decay
+
     for epoch in range(start_epoch_s2, stage2_cfg.epochs):
         epoch_start = time.time()
-        train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer2, scaler, stage2_cfg, device, args.amp)
+        train_loss = train_one_epoch(model, train_loader, loss_fn, optimizer, scaler, stage2_cfg, device, args.amp)
         log = {"epoch": epoch, "stage": "stage2", "train_loss": train_loss}
 
         if (epoch + 1) % args.val_interval == 0:
@@ -805,16 +816,15 @@ def run_fold(fold: int, args: argparse.Namespace):
             log.update(metrics)
             if metrics["dice_mean"] > best_stage2:
                 best_stage2 = metrics["dice_mean"]
-                ckpt_path = save_checkpoint(model, optimizer2, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], "stage2_best.pt")
-                print(f"  > Stage2 best improved to {best_stage2:.4f} (checkpoint: {ckpt_path.name})")
-        
+                save_checkpoint(model, optimizer, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], "stage2_best.pt")
+                print(f"  > Stage2 best improved to {best_stage2:.4f}")
+
         if (epoch + 1) % args.save_checkpoint_frequency == 0:
-            ckpt_path = save_checkpoint(model, optimizer2, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], f"stage2_epoch{epoch+1}.pt")
-            print(f"  > Saved checkpoint {ckpt_path.name}")
+            save_checkpoint(model, optimizer, scaler, epoch, "stage2", best_stage2, dirs["checkpoints"], f"stage2_epoch{epoch+1}.pt")
 
         log["epoch_seconds"] = time.time() - epoch_start
         history.append(log)
-        print(f"Epoch {epoch+1}/{stage2_cfg.epochs} | loss={train_loss:.4f}")
+        print(f"Epoch {epoch+1}/{stage2_cfg.epochs} | loss={train_loss:.4f} | dice_mean={log.get('dice_mean', 'N/A')}")
 
     metrics_path = dirs["metrics"] / "training_log.json"
     with metrics_path.open("w", encoding="utf-8") as handle:
