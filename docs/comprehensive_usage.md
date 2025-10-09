@@ -530,12 +530,14 @@ python scripts/prepare_nnunet_dataset.py `
 ```powershell
 .\.venv_monai\Scripts\Activate.ps1
 python scripts/train_monai_finetune.py `
-    --data-root training_data training_data_additional `
+    --data-root training_data `
     --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
-    --fold 0 `
-    --output-root outputs/monai_ft_nnunet_aligned `
-    --stage1-epochs 20 `
-    --stage2-epochs 30 `
+    --fold 1 `
+    --output-root outputs/monai_ft `
+    --stage1-epochs 1 `
+    --stage2-epochs 1 `
+    --cache-rate 0.01 `
+    --head-key 'conv_final' `
     --amp
 ```
 
@@ -546,14 +548,14 @@ python scripts/train_monai_finetune.py `
     --split-json outputs/nnunet/nnUNet_preprocessed/Dataset501_BraTSPostTx/splits_final.json `
     --fold 0 `
     --output-root outputs/monai_ft_continued `
-    --stage1-epochs 20 `
-    --stage2-epochs 30 `
+    --stage1-epochs 1 `
+    --stage2-epochs 1 `
     --batch-size 3 `
     --stage1-accum 4 `
     --stage2-accum 4 `
     --save-checkpoint-frequency 5 `
     --amp `
-    --cache-rate 0.3 `
+    --cache-rate 0.25 `
     --load-weights outputs/monai_ft/fold0/checkpoints/stage2_epoch30.pt
 ```
 
@@ -574,8 +576,8 @@ python scripts/infer_monai_finetune.py `
     --data-root training_data_additional `
     --dataset-json outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/dataset.json `
     --fold 0 `
-    --checkpoint outputs/monai_ft_nnunet_aligned/fold0/checkpoints/stage2_best.pt `
-    --output-dir outputs/monai_ft_nnunet_aligned/predictions/fold0 `
+    --checkpoint outputs/monai_ft_continued/fold0/checkpoints/stage2_best.pt `
+    --output-dir outputs/monai_ft_continued/predictions/fold0 `
     --spacing 1.0 1.0 1.0 `
     --roi-size 224 224 144 `
     --amp
@@ -599,8 +601,8 @@ If Step&nbsp;3 used `--run-evaluation`, the reports are already generated. Other
 .\.venv_nnunet\Scripts\Activate.ps1
 python scripts/run_full_evaluation.py `
     outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
-    outputs/monai_ft_nnunet_aligned/predictions/fold0 `
-    --output-dir outputs/monai_ft_nnunet_aligned/reports/fold0 `
+    outputs/monai_ft_continued/predictions/fold0 `
+    --output-dir outputs/monai_ft_continued/reports/fold0 `
     --pretty
 ```
 
