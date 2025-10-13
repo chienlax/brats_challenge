@@ -1,6 +1,6 @@
 # BraTS Post-treatment
 
-**For detailed setup instruction, go to: [Usage Guide Document](docs/usage_guide.md)**
+**For detailed setup instruction, go to: [Usage Guide Document](docs/comprehensive_usage.md)**
 
 ## Setup
 
