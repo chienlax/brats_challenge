@@ -38,7 +38,7 @@ try:  # pragma: no cover - allow import when used as module
 		summarise_metrics,
 	)
 except ImportError:  # pragma: no cover
-	from scripts.compute_brats_lesion_metrics import (  # type: ignore
+	from scripts.models.compute_brats_lesion_metrics import (  # type: ignore
 		build_label_groups,
 		case_id_from_filename,
 		collect_cases,
