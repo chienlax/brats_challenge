@@ -20,8 +20,6 @@ param(
     [switch]$SkipPrediction,
     [switch]$SkipEvaluation,
     [string]$Device = "cuda",
-    [int]$StartFold = 0,
-    [int]$EndFold = 4,
     [switch]$Help
 )
 
@@ -37,8 +35,6 @@ Options:
   -TrainSources <string>   Training data directory (default: training_data)
   -TestSources <string>    Test data directory (default: test_data)
   -Device <string>         Device to use: cuda or cpu (default: cuda)
-  -StartFold <int>         Starting fold for training (default: 0)
-  -EndFold <int>           Ending fold for training (default: 4)
   -SkipEnvSetup           Skip environment setup
   -SkipDataPrep           Skip dataset preparation
   -SkipPreprocess         Skip planning and preprocessing
@@ -54,11 +50,8 @@ Examples:
   # Run with custom dataset ID
   .\scripts\run_nnunet_pipeline.ps1 -DatasetId Dataset502_Custom
 
-  # Skip training (use existing models)
+  # Skip training (use existing model)
   .\scripts\run_nnunet_pipeline.ps1 -SkipTraining
-
-  # Train only folds 0-2
-  .\scripts\run_nnunet_pipeline.ps1 -StartFold 0 -EndFold 2
 
   # Use CPU instead of GPU
   .\scripts\run_nnunet_pipeline.ps1 -Device cpu
@@ -100,8 +93,8 @@ $OutputsDir = Join-Path $RepoRoot "outputs\nnunet"
 $RawDir = Join-Path $OutputsDir "nnUNet_raw"
 $PreprocessedDir = Join-Path $OutputsDir "nnUNet_preprocessed"
 $ResultsDir = Join-Path $OutputsDir "nnUNet_results"
-$PredictionsDir = Join-Path $OutputsDir "predictions\$DatasetId\3d_fullres_ensemble"
-$MetricsDir = Join-Path $OutputsDir "reports\metrics\3d_fullres_ensemble"
+$PredictionsDir = Join-Path $OutputsDir "predictions\$DatasetId\3d_fullres_all"
+$MetricsDir = Join-Path $OutputsDir "reports\metrics\3d_fullres_all"
 
 Write-Host @"
 
@@ -115,7 +108,7 @@ Configuration:
   Train Sources:   $TrainSources
   Test Sources:    $TestSources
   Device:          $Device
-  Training Folds:  $StartFold to $EndFold
+  Training:        Single model on all data
 
 Pipeline Steps:
   Environment Setup:    $(if ($SkipEnvSetup) { "SKIP" } else { "RUN" })
@@ -234,36 +227,32 @@ if (-not $SkipPreprocess) {
 }
 
 # ============================================================================
-# STEP 4: Training All Folds
+# STEP 4: Training Model on All Data
 # ============================================================================
 if (-not $SkipTraining) {
-    Write-Step "Step 4: Training All Folds ($StartFold to $EndFold)"
+    Write-Step "Step 4: Training Model on All Data"
     
-    for ($fold = $StartFold; $fold -le $EndFold; $fold++) {
-        Write-Info "Training fold $fold..."
-        $FoldStartTime = Get-Date
-        
-        nnUNetv2_train $DatasetId 3d_fullres $fold --npz --device $Device
-        
-        if ($LASTEXITCODE -ne 0) {
-            Write-Error-Custom "Training failed for fold $fold"
-            exit 1
-        }
-        
-        $FoldDuration = (Get-Date) - $FoldStartTime
-        Write-Success "Fold $fold completed in $($FoldDuration.ToString('hh\:mm\:ss'))"
+    Write-Info "Training single model on all training data..."
+    $TrainingStartTime = Get-Date
+    
+    nnUNetv2_train $DatasetId 3d_fullres all --npz --device $Device
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error-Custom "Training failed"
+        exit 1
     }
     
-    Write-Success "All folds training completed"
+    $TrainingDuration = (Get-Date) - $TrainingStartTime
+    Write-Success "Training completed in $($TrainingDuration.ToString('hh\:mm\:ss'))"
 } else {
-    Write-Step "Step 4: Training All Folds (SKIPPED)"
+    Write-Step "Step 4: Training Model on All Data (SKIPPED)"
 }
 
 # ============================================================================
-# STEP 5: Generate Ensemble Predictions
+# STEP 5: Generate Predictions
 # ============================================================================
 if (-not $SkipPrediction) {
-    Write-Step "Step 5: Generate Ensemble Predictions"
+    Write-Step "Step 5: Generate Predictions"
     
     $InputDir = Join-Path $RawDir "$DatasetId\imagesTs"
     
@@ -272,27 +261,23 @@ if (-not $SkipPrediction) {
         exit 1
     }
     
-    Write-Info "Generating predictions with ensemble of folds $StartFold to $EndFold..."
-    $FoldArgs = @()
-    for ($fold = $StartFold; $fold -le $EndFold; $fold++) {
-        $FoldArgs += $fold
-    }
+    Write-Info "Generating predictions with model trained on all data..."
     
     nnUNetv2_predict `
         -i $InputDir `
         -o $PredictionsDir `
         -d $DatasetId `
         -c 3d_fullres `
-        -f $FoldArgs `
+        -f all `
         --save_probabilities
     
     if ($LASTEXITCODE -ne 0) {
         Write-Error-Custom "Prediction generation failed"
         exit 1
     }
-    Write-Success "Ensemble predictions generated"
+    Write-Success "Predictions generated"
 } else {
-    Write-Step "Step 5: Generate Ensemble Predictions (SKIPPED)"
+    Write-Step "Step 5: Generate Predictions (SKIPPED)"
 }
 
 # ============================================================================

@@ -45,13 +45,9 @@ and `nnUNetv2_preprocess` (in that order).
 You pick which configurations (2d, 3d_fullres, 3d_lowres, 3d_cascade_fullres) should be trained! If you have no idea 
 what performs best on your data, just run all of them and let nnU-Net identify the best one. It's up to you!
 
-nnU-Net trains all configurations in a 5-fold cross-validation over the training cases. This is 1) needed so that 
-nnU-Net can estimate the performance of each configuration and tell you which one should be used for your 
-segmentation problem and 2) a natural way of obtaining a good model ensemble (average the output of these 5 models 
-for prediction) to boost performance.
+nnU-Net trains all configurations in a 5-fold cross-validation over the training cases. This is 1) needed so that nnU-Net can estimate the performance of each configuration and tell you which one should be used for your segmentation problem and 2) a natural way of obtaining a good model ensemble (average the output of these 5 models for prediction) to boost performance.
 
-You can influence the splits nnU-Net uses for 5-fold cross-validation (see [here](manual_data_splits.md)). If you 
-prefer to train a single model on all training cases, this is also possible (see below).
+You can influence the splits nnU-Net uses for 5-fold cross-validation (see [here](manual_data_splits.md)). If you prefer to train a single model on all training cases, this is also possible (see below).
 
 **Note that not all U-Net configurations are created for all datasets. In datasets with small image sizes, the U-Net cascade (and with it the 3d_lowres configuration) is omitted because the patch size of the full resolution U-Net already covers a large part of the input images.**
 

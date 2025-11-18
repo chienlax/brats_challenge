@@ -21,11 +21,8 @@ This script automates all steps below. Use `-Help` to see all options:
 # Run with custom dataset ID
 .\scripts\run_nnunet_pipeline.ps1 -DatasetId Dataset502_Custom
 
-# Skip training (use existing models for prediction only)
+# Skip training (use existing model for prediction only)
 .\scripts\run_nnunet_pipeline.ps1 -SkipTraining
-
-# Train specific folds only
-.\scripts\run_nnunet_pipeline.ps1 -StartFold 0 -EndFold 2
 
 # Use CPU instead of GPU
 .\scripts\run_nnunet_pipeline.ps1 -Device cpu
@@ -43,8 +40,8 @@ The following sections provide detailed manual commands for each pipeline step.
 
 ### Create and activate virtual environment
 ```powershell
-python -m venv .venv_nnunet
-.\.venv_nnunet\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r requirements_nnunet.txt --extra-index-url https://download.pytorch.org/whl/cu124
 ```
@@ -107,53 +104,41 @@ nnUNetv2_plan_and_preprocess -d 501 -c 3d_fullres --verify_dataset_integrity --v
 
 ---
 
-## 4. Train All 5 Folds (Cross-Validation)
+## 4. Train Model (All Data)
 
-Train each fold sequentially:
+Train a single model using all training data:
 
 ```powershell
-# Fold 0
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz -device cuda
-
-# Fold 1
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 1 --npz -device cuda
-
-# Fold 2
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 2 --npz -device cuda
-
-# Fold 3
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 3 --npz -device cuda
-
-# Fold 4
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 4 --npz -device cuda
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz --device cuda
 ```
 
 **Key parameters:**
 - `Dataset501_BraTSPostTx`: Dataset identifier
 - `3d_fullres`: Configuration to train
-- `0-4`: Fold index
+- `all`: Train on all data (no cross-validation)
 - `--npz`: Save softmax probabilities (required for evaluation)
 - `--device cuda`: Use GPU (change to `cpu` if no GPU available)
 
 **Notes:**
-- Each fold trains for 1000 epochs by default
+- Training uses all available training data in a single model
+- Trains for 1000 epochs by default
 - Checkpoints saved every 50 epochs
 - To resume interrupted training, add `--c` flag
 - Use `CUDA_VISIBLE_DEVICES=X` to select specific GPU
 
 ---
 
-## 5. Generate Ensemble Predictions
+## 5. Generate Predictions
 
-Predict using all 5 folds (ensemble):
+Predict using the trained model:
 
 ```powershell
 nnUNetv2_predict `
     -i outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/imagesTs `
-    -o outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_ensemble `
+    -o outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_all `
     -d Dataset501_BraTSPostTx `
     -c 3d_fullres `
-    -f 0 1 2 3 4 `
+    -f all `
     --save_probabilities
 ```
 
@@ -162,13 +147,12 @@ nnUNetv2_predict `
 - `-o`: Output directory for predictions
 - `-d`: Dataset identifier
 - `-c`: Configuration used
-- `-f 0 1 2 3 4`: Use all 5 folds for ensemble prediction
+- `-f all`: Use the model trained on all data
 - `--save_probabilities`: Save probability maps (optional)
 
 **Notes:**
-- All 5 folds must be trained before running ensemble prediction
-- Ensemble averages predictions from all folds automatically
-- For single fold prediction, use `-f 0` (or any single fold)
+- The model trained on all data must be completed before running prediction
+- Single model inference (no ensembling)
 
 ---
 
@@ -177,8 +161,8 @@ nnUNetv2_predict `
 ```powershell
 python scripts/run_full_evaluation.py `
     outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
-    outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_ensemble `
-    --output-dir outputs/nnunet/reports/metrics/3d_fullres_ensemble `
+    outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_all `
+    --output-dir outputs/nnunet/reports/metrics/3d_fullres_all `
     --pretty
 ```
 
@@ -232,27 +216,23 @@ python scripts/prepare_nnunet_dataset.py `
 # 5. Plan and preprocess
 nnUNetv2_plan_and_preprocess -d 501 -c 3d_fullres --verify_dataset_integrity --no_pp False --verbose
 
-# 6. Train all 5 folds
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 0 --npz --device cuda
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 1 --npz --device cuda
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 2 --npz --device cuda
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 3 --npz --device cuda
-nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres 4 --npz --device cuda
+# 6. Train model on all data
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz --device cuda
 
-# 7. Generate ensemble predictions
+# 7. Generate predictions
 nnUNetv2_predict `
     -i outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/imagesTs `
-    -o outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_ensemble `
+    -o outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_all `
     -d Dataset501_BraTSPostTx `
     -c 3d_fullres `
-    -f 0 1 2 3 4 `
+    -f all `
     --save_probabilities
 
 # 8. Evaluate predictions
 python scripts/run_full_evaluation.py `
     outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
-    outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_ensemble `
-    --output-dir outputs/nnunet/reports/metrics/3d_fullres_ensemble `
+    outputs/nnunet/predictions/Dataset501_BraTSPostTx/3d_fullres_all `
+    --output-dir outputs/nnunet/reports/metrics/3d_fullres_all `
     --pretty
 ```
 
@@ -301,15 +281,11 @@ outputs/nnunet/
 │   └── nnUNetPlans_3d_fullres/  # Preprocessed data
 ├── nnUNet_results/Dataset501_BraTSPostTx/
 │   └── nnUNetTrainer__nnUNetPlans__3d_fullres/
-│       ├── fold_0/        # Model checkpoints, validation results
-│       ├── fold_1/
-│       ├── fold_2/
-│       ├── fold_3/
-│       └── fold_4/
+│       └── fold_all/      # Model checkpoints, validation results
 ├── predictions/Dataset501_BraTSPostTx/
-│   └── 3d_fullres_ensemble/     # Ensemble predictions (.nii.gz)
+│   └── 3d_fullres_all/    # Predictions (.nii.gz)
 └── reports/metrics/
-    └── 3d_fullres_ensemble/
+    └── 3d_fullres_all/
         ├── nnunet_metrics.json
         ├── lesion_metrics.json
         └── combined_metrics.json
