@@ -20,6 +20,7 @@ param(
     [switch]$SkipPrediction,
     [switch]$SkipEvaluation,
     [string]$Device = "cuda",
+    [string]$GpuIds = "0,1",
     [switch]$Help
 )
 
@@ -35,6 +36,7 @@ Options:
   -TrainSources <string>   Training data directory (default: training_data)
   -TestSources <string>    Test data directory (default: test_data)
   -Device <string>         Device to use: cuda or cpu (default: cuda)
+  -GpuIds <string>         GPU IDs to use, comma-separated (default: "0,1" for dual H100)
   -SkipEnvSetup           Skip environment setup
   -SkipDataPrep           Skip dataset preparation
   -SkipPreprocess         Skip planning and preprocessing
@@ -44,11 +46,14 @@ Options:
   -Help                   Show this help message
 
 Examples:
-  # Run complete pipeline
+  # Run complete pipeline with dual H100 GPUs
   .\scripts\run_nnunet_pipeline.ps1
 
   # Run with custom dataset ID
   .\scripts\run_nnunet_pipeline.ps1 -DatasetId Dataset502_Custom
+
+  # Use single GPU only
+  .\scripts\run_nnunet_pipeline.ps1 -GpuIds "0"
 
   # Skip training (use existing model)
   .\scripts\run_nnunet_pipeline.ps1 -SkipTraining
@@ -108,6 +113,7 @@ Configuration:
   Train Sources:   $TrainSources
   Test Sources:    $TestSources
   Device:          $Device
+  GPU IDs:         $(if ($Device -eq 'cuda') { $GpuIds } else { 'N/A (CPU mode)' })
   Training:        Single model on all data
 
 Pipeline Steps:
@@ -231,6 +237,13 @@ if (-not $SkipPreprocess) {
 # ============================================================================
 if (-not $SkipTraining) {
     Write-Step "Step 4: Training Model on All Data"
+    
+    # Set GPU configuration
+    if ($Device -eq 'cuda') {
+        $env:CUDA_VISIBLE_DEVICES = $GpuIds
+        $GpuCount = ($GpuIds -split ',').Count
+        Write-Info "Using $GpuCount GPU(s): $GpuIds"
+    }
     
     Write-Info "Training single model on all training data..."
     $TrainingStartTime = Get-Date

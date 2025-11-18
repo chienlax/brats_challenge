@@ -108,7 +108,15 @@ nnUNetv2_plan_and_preprocess -d 501 -c 3d_fullres --verify_dataset_integrity --v
 
 Train a single model using all training data:
 
+### Single GPU Training
 ```powershell
+nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz --device cuda
+```
+
+### Multi-GPU Training (Recommended for 2x H100)
+```powershell
+# Use both GPUs with DataDataParallel (DDP)
+$env:CUDA_VISIBLE_DEVICES = "0,1"
 nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz --device cuda
 ```
 
@@ -118,13 +126,16 @@ nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz --device cuda
 - `all`: Train on all data (no cross-validation)
 - `--npz`: Save softmax probabilities (required for evaluation)
 - `--device cuda`: Use GPU (change to `cpu` if no GPU available)
+- `CUDA_VISIBLE_DEVICES`: Set to "0,1" to use both GPUs
 
 **Notes:**
 - Training uses all available training data in a single model
+- Multi-GPU training automatically uses DataParallel when multiple GPUs are detected
+- With 2x H100 GPUs, training will be significantly faster
 - Trains for 1000 epochs by default
 - Checkpoints saved every 50 epochs
 - To resume interrupted training, add `--c` flag
-- Use `CUDA_VISIBLE_DEVICES=X` to select specific GPU
+- To use specific GPU only: `$env:CUDA_VISIBLE_DEVICES = "0"` (or "1")
 
 ---
 
@@ -216,7 +227,8 @@ python scripts/prepare_nnunet_dataset.py `
 # 5. Plan and preprocess
 nnUNetv2_plan_and_preprocess -d 501 -c 3d_fullres --verify_dataset_integrity --no_pp False --verbose
 
-# 6. Train model on all data
+# 6. Train model on all data (with multi-GPU support)
+$env:CUDA_VISIBLE_DEVICES = "0,1"  # Use both H100 GPUs
 nnUNetv2_train Dataset501_BraTSPostTx 3d_fullres all --npz --device cuda
 
 # 7. Generate predictions
@@ -256,8 +268,14 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 **Out of GPU memory during training:**
 - Reduce batch size in plans file
+- Use single GPU instead of both: `$env:CUDA_VISIBLE_DEVICES = "0"`
 - Train on CPU (slower): `--device cpu`
 - Use smaller GPU-friendly configuration if available
+
+**Multi-GPU not working:**
+- Verify both GPUs are detected: `nvidia-smi`
+- Check PyTorch can see both GPUs: `python -c "import torch; print(torch.cuda.device_count())"`
+- Ensure CUDA_VISIBLE_DEVICES is set correctly: `$env:CUDA_VISIBLE_DEVICES = "0,1"`
 
 **Missing test labels error:**
 - Remove `--require-test-labels` flag if test set is unlabeled
