@@ -7,7 +7,6 @@
 ## 3. Detailed usage by script
 
 
-
 ### 3.3 `scripts/prepare_nnunet_dataset.py`
 
 **Purpose:** reorganize BraTS folders into the nnU-Net v2 raw format (`imagesTr/`, `labelsTr/`, `imagesTs/`, `labelsTs/`) and emit a `dataset.json` describing the cohort.

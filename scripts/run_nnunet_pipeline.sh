@@ -288,7 +288,7 @@ if [ "$SKIP_TRAINING" = false ]; then
     print_info "Training single model on all training data..."
     TRAINING_START=$(date +%s)
     
-    nnUNetv2_train "$DATASET_ID" 3d_fullres all --npz --device "$DEVICE"
+    nnUNetv2_train "$DATASET_ID" 3d_fullres all --npz -device "$DEVICE"
     
     TRAINING_END=$(date +%s)
     TRAINING_DURATION=$((TRAINING_END - TRAINING_START))

@@ -75,8 +75,8 @@ The table below lists every meaningful path and its purpose. Files or folders no
 ### 3.1 Create and activate a virtual environment
 
 ```powershell
-python -m venv .venv
-.\\.venv\Scripts\Activate.ps1
+python -m venv venv
+.\\venv\Scripts\Activate.ps1
 python --version
 ```
 
