@@ -4,6 +4,182 @@
 
 ---
 
+## 3. Detailed usage by script
+
+
+
+### 3.3 `scripts/prepare_nnunet_dataset.py`
+
+**Purpose:** reorganize BraTS folders into the nnU-Net v2 raw format (`imagesTr/`, `labelsTr/`, `imagesTs/`, `labelsTs/`) and emit a `dataset.json` describing the cohort.
+
+**Run it:**
+
+```powershell
+.\.venv_nnunet\Scripts\Activate.ps1
+python scripts/prepare_nnunet_dataset.py `
+    --clean `
+    --train-sources training_data `
+    --test-sources test_data `
+    --dataset-id Dataset501_BraTSPostTx
+```
+
+**Key behaviour:**
+- Creates hard links where possible; falls back to copy if the filesystem forbids linking.
+- Validates that every training case contains all four modalities and a segmentation.
+- Test cases may omit `-seg` unless `--require-test-labels` is specified (recommended when evaluating against labels).
+
+**Arguments to know:**
+- `--train-sources`, `--test-sources`: override the default roots; accepts multiple directories.
+- `--dataset-id`: names the folder inside `nnUNet_raw` and must match downstream training/evaluation IDs.
+- `--nnunet-raw`: points to a custom raw data root (defaults to `outputs/nnunet/nnUNet_raw`).
+- `--clean`: removes any existing dataset folder before rebuilding to prevent stale cases.
+- `--require-test-labels`: aborts if any test case lacks a segmentation so that `labelsTs/` stays complete.
+
+**Outputs:**
+- `outputs/nnunet/nnUNet_raw/<dataset-id>/imagesTr/*.nii.gz`
+- `outputs/nnunet/nnUNet_raw/<dataset-id>/labelsTr/*.nii.gz`
+- Optional `imagesTs/` and `labelsTs/`
+- `dataset.json` describing modalities and label schema.
+
+**Follow-up:** always regenerate `nnUNet_preprocessed` by running `nnUNetv2_plan_and_preprocess` after dataset structure changes.
+
+
+### 3.6 `scripts/compute_brats_lesion_metrics.py`
+
+**Purpose:** compute lesion-wise Dice and 95% Hausdorff distance for each BraTS sub-region following the 2024 challenge definition (connected components with 26-connectivity).
+
+**Run it:**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/compute_brats_lesion_metrics.py `
+    outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
+    outputs/monai_ft_nnunet_aligned/predictions/fold0 `
+    --output outputs/monai_ft_nnunet_aligned/reports_fold0/lesion_metrics.json `
+    --pretty
+```
+
+**Inputs:** both directories must contain `.nii.gz` files with consistent case IDs. The script tolerates suffix variations (`-seg`, `_seg`, `_pred`).
+
+**Key options:**
+- `--labels`: foreground labels to evaluate (defaults to `1 2 3 4`).
+- `--omit-aggregates`: skip Tumor Core (TC) and Whole Tumor (WT) aggregates.
+- `--pretty`: pretty-print the JSON output.
+
+**Outputs:**
+- JSON file containing `cases` (per-case metrics & lesion tables) and `summary` (mean/median/min/max/std for each label).
+
+**Notes:**
+- HD95 values for missed/spurious lesions are penalised by the volume diagonal length.
+- Great companion when predictions are produced outside nnU-Net (e.g., MONAI fine-tuning).
+
+### 3.7 `scripts/run_full_evaluation.py`
+
+**Purpose:** orchestrate two evaluation passes—nnU-Net’s CLI metrics and the bespoke lesion-wise report—in a single command, emitting a consolidated manifest.
+
+**Run it:**
+
+```powershell
+.\.venv_nnunet\Scripts\Activate.ps1
+python scripts/run_full_evaluation.py `
+    outputs/nnunet/nnUNet_raw/Dataset501_BraTSPostTx/labelsTs `
+    outputs/monai_ft_nnunet_aligned/predictions/fold0 `
+    --output-dir outputs/monai_ft_nnunet_aligned/reports/fold0 `
+    --pretty
+```
+
+**What happens:**
+1. Invokes `nnUNetv2_evaluate_simple` (or a custom command via `--nnunet-cmd`) unless `--skip-nnunet` is set.
+2. Runs the same lesion-wise computation as `compute_brats_lesion_metrics.py`.
+3. Writes three JSONs inside `--output-dir` by default: `nnunet_metrics.json`, `lesion_metrics.json`, and `full_metrics.json`.
+
+**Useful flags:**
+- `--nnunet-output`, `--lesion-output`, `--combined-output`: override the default file locations.
+- `--skip-nnunet`: skip the nnU-Net CLI invocation when the binary is unavailable.
+- `--labels`, `--omit-aggregates`: forward these parameters to the lesion metrics module.
+
+**Requirements:** `nnUNetv2_evaluate_simple` must be discoverable on `PATH` (activate `.venv_nnunet`). If it’s missing, either install nnU-Net v2 or run with `--skip-nnunet`.
+
+### 3.1 `scripts/analyze_statistics.py`
+
+**What it does:** hosts the statistics inspector Dash app with two tabs:
+- *Case Statistics* renders modality histograms and segmentation label tables.
+- *Dataset Statistics* computes aggregated metrics (spacing, intensity percentiles, label distributions) and caches them under `outputs/statistics_cache/` for speedy reloads.
+
+**Run it:**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/analyze_statistics.py --open-browser
+```
+
+**Key arguments:**
+- `--data-root PATH` (repeatable): override the dataset roots (defaults to `training_data`, `training_data_additional`, `validation_data`).
+- `--host`, `--port`: bind interface/port (default `127.0.0.1:8050`).
+- `--debug`: enable Dash hot reload for development.
+- `--open-browser`: automatically open the app in the default browser once the server starts.
+
+**Workflow tips:**
+- Launch once per session; cached aggregates avoid recomputation between runs.
+- The dataset tab exposes `Recompute` and `Load Cached` controls—use `Recompute` after adding new cases.
+- All case discovery respects the BraTS naming convention; missing modalities raise a visible error.
+
+### 3.2 `scripts/visualize_volumes.py`
+
+**What it does:** a single entry point for interactive browsing, static figure export, and GIF animation. Three subcommands are exposed through the `--mode` flag.
+
+**Environments:** base `.venv` (depends on matplotlib, imageio, Dash).
+
+#### Interactive mode (Dash app)
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python scripts/visualize_volumes.py --mode interactive --open-browser
+```
+
+- Shares the same Dash backend as `analyze_statistics.py` but focuses on slice viewers.
+- Accepts multiple `--data-root` entries; defaults to all known roots.
+- Supports `--debug`, `--host`, `--port`, `--open-browser` like the statistics app.
+
+#### Static figure mode
+
+```powershell
+python scripts/visualize_volumes.py --mode static `
+    --case-dir training_data_additional/BraTS-GLI-02570-100 `
+    --layout modalities `
+    --axis axial `
+    --fraction 0.55 `
+    --output outputs/figures/BraTS-GLI-02570-100_modalities.png
+```
+
+- `--layout modalities` shows all available modalities on one slice; choose slice via `--fraction` or `--index`.
+- `--layout orthogonal` produces sagittal/coronal/axial views for one modality (set with `--modality` and optional `--indices`).
+- Overlays default to on; add `--no-overlay` to disable segmentation blending.
+
+#### GIF mode
+
+```powershell
+python scripts/visualize_volumes.py --mode gif `
+    --root training_data_additional `
+    --case BraTS-GLI-02570-100 `
+    --axis axial `
+    --modality t2f `
+    --step 3 `
+    --overlay `
+    --output-dir outputs/gifs
+```
+
+- Processes either a single case (`--case`) or a whole root (optionally capped via `--max-cases`).
+- Per-frame rendering honours percentile normalization and optional overlays.
+- GIFs appear in `--output-dir` named `<case>_<modality>_<axis>.gif`.
+
+**Troubleshooting:**
+- All modes raise fast if a modality or segmentation is missing—fix the dataset rather than ignoring it.
+- When running headless, keep `--show` unset for static mode; figures will still be written to disk.
+
+---
+
+
 ## 4. End-to-end workflows
 
 ### 4.1. Before you start
@@ -11,7 +187,7 @@
 #### 4.1.1 Repository layout refresher
 
 - Source code lives under `apps/` (Dash apps) and `scripts/` (CLI utilities).
-- Raw BraTS cases belong in `training_data/`, `test_data/`, or `validation_data/`; keep them out of Git.
+- Raw BraTS cases belong in `training_data/`, `training_data_additional/`, or `validation_data/`; keep them out of Git.
 - Generated assets go into `outputs/` (ignored by Git) to preserve reproducibility.
 
 #### 4.1.2 Python environments
@@ -28,7 +204,7 @@
     ```
 
 - **nnU-Net dataset prep & evaluation**  
-    Interpreter: `.venv\Scripts\python.exe`  
+    Interpreter: `.venv_nnunet\Scripts\python.exe`  
     Commands (PowerShell):
 
     ```powershell
@@ -87,7 +263,7 @@ python scripts/prepare_nnunet_dataset.py `
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-nnUNetv2_plan_and_preprocess -d 501 --verify_dataset_integrity --no_pp False --verbose
+nnUNetv2_plan_and_preprocess -d 501 --verify_dataset_integrity --no_preprocessing False
 ```
 
 - `-d 501`: dataset ID created in Step&nbsp;1; change it whenever you use a custom `--dataset-id` during preparation.

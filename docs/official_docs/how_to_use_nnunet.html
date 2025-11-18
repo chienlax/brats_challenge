@@ -1,0 +1,165 @@
+<!DOCTYPE html><html><head>
+      <title>how_to_use_nnunet</title>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      
+      <link rel="stylesheet" href="file:///c:\Users\Quang Chien\.vscode\extensions\shd101wyy.markdown-preview-enhanced-0.8.20\crossnote\dependencies\katex\katex.min.css">
+      
+      
+      
+      
+      
+      <style>
+      code[class*=language-],pre[class*=language-]{color:#333;background:0 0;font-family:Consolas,"Liberation Mono",Menlo,Courier,monospace;text-align:left;white-space:pre;word-spacing:normal;word-break:normal;word-wrap:normal;line-height:1.4;-moz-tab-size:8;-o-tab-size:8;tab-size:8;-webkit-hyphens:none;-moz-hyphens:none;-ms-hyphens:none;hyphens:none}pre[class*=language-]{padding:.8em;overflow:auto;border-radius:3px;background:#f5f5f5}:not(pre)>code[class*=language-]{padding:.1em;border-radius:.3em;white-space:normal;background:#f5f5f5}.token.blockquote,.token.comment{color:#969896}.token.cdata{color:#183691}.token.doctype,.token.macro.property,.token.punctuation,.token.variable{color:#333}.token.builtin,.token.important,.token.keyword,.token.operator,.token.rule{color:#a71d5d}.token.attr-value,.token.regex,.token.string,.token.url{color:#183691}.token.atrule,.token.boolean,.token.code,.token.command,.token.constant,.token.entity,.token.number,.token.property,.token.symbol{color:#0086b3}.token.prolog,.token.selector,.token.tag{color:#63a35c}.token.attr-name,.token.class,.token.class-name,.token.function,.token.id,.token.namespace,.token.pseudo-class,.token.pseudo-element,.token.url-reference .token.variable{color:#795da3}.token.entity{cursor:help}.token.title,.token.title .token.punctuation{font-weight:700;color:#1d3e81}.token.list{color:#ed6a43}.token.inserted{background-color:#eaffea;color:#55a532}.token.deleted{background-color:#ffecec;color:#bd2c00}.token.bold{font-weight:700}.token.italic{font-style:italic}.language-json .token.property{color:#183691}.language-markup .token.tag .token.punctuation{color:#333}.language-css .token.function,code.language-css{color:#0086b3}.language-yaml .token.atrule{color:#63a35c}code.language-yaml{color:#183691}.language-ruby .token.function{color:#333}.language-markdown .token.url{color:#795da3}.language-makefile .token.symbol{color:#795da3}.language-makefile .token.variable{color:#183691}.language-makefile .token.builtin{color:#0086b3}.language-bash .token.keyword{color:#0086b3}pre[data-line]{position:relative;padding:1em 0 1em 3em}pre[data-line] .line-highlight-wrapper{position:absolute;top:0;left:0;background-color:transparent;display:block;width:100%}pre[data-line] .line-highlight{position:absolute;left:0;right:0;padding:inherit 0;margin-top:1em;background:hsla(24,20%,50%,.08);background:linear-gradient(to right,hsla(24,20%,50%,.1) 70%,hsla(24,20%,50%,0));pointer-events:none;line-height:inherit;white-space:pre}pre[data-line] .line-highlight:before,pre[data-line] .line-highlight[data-end]:after{content:attr(data-start);position:absolute;top:.4em;left:.6em;min-width:1em;padding:0 .5em;background-color:hsla(24,20%,50%,.4);color:#f4f1ef;font:bold 65%/1.5 sans-serif;text-align:center;vertical-align:.3em;border-radius:999px;text-shadow:none;box-shadow:0 1px #fff}pre[data-line] .line-highlight[data-end]:after{content:attr(data-end);top:auto;bottom:.4em}html body{font-family:'Helvetica Neue',Helvetica,'Segoe UI',Arial,freesans,sans-serif;font-size:16px;line-height:1.6;color:#333;background-color:#fff;overflow:initial;box-sizing:border-box;word-wrap:break-word}html body>:first-child{margin-top:0}html body h1,html body h2,html body h3,html body h4,html body h5,html body h6{line-height:1.2;margin-top:1em;margin-bottom:16px;color:#000}html body h1{font-size:2.25em;font-weight:300;padding-bottom:.3em}html body h2{font-size:1.75em;font-weight:400;padding-bottom:.3em}html body h3{font-size:1.5em;font-weight:500}html body h4{font-size:1.25em;font-weight:600}html body h5{font-size:1.1em;font-weight:600}html body h6{font-size:1em;font-weight:600}html body h1,html body h2,html body h3,html body h4,html body h5{font-weight:600}html body h5{font-size:1em}html body h6{color:#5c5c5c}html body strong{color:#000}html body del{color:#5c5c5c}html body a:not([href]){color:inherit;text-decoration:none}html body a{color:#08c;text-decoration:none}html body a:hover{color:#00a3f5;text-decoration:none}html body img{max-width:100%}html body>p{margin-top:0;margin-bottom:16px;word-wrap:break-word}html body>ol,html body>ul{margin-bottom:16px}html body ol,html body ul{padding-left:2em}html body ol.no-list,html body ul.no-list{padding:0;list-style-type:none}html body ol ol,html body ol ul,html body ul ol,html body ul ul{margin-top:0;margin-bottom:0}html body li{margin-bottom:0}html body li.task-list-item{list-style:none}html body li>p{margin-top:0;margin-bottom:0}html body .task-list-item-checkbox{margin:0 .2em .25em -1.8em;vertical-align:middle}html body .task-list-item-checkbox:hover{cursor:pointer}html body blockquote{margin:16px 0;font-size:inherit;padding:0 15px;color:#5c5c5c;background-color:#f0f0f0;border-left:4px solid #d6d6d6}html body blockquote>:first-child{margin-top:0}html body blockquote>:last-child{margin-bottom:0}html body hr{height:4px;margin:32px 0;background-color:#d6d6d6;border:0 none}html body table{margin:10px 0 15px 0;border-collapse:collapse;border-spacing:0;display:block;width:100%;overflow:auto;word-break:normal;word-break:keep-all}html body table th{font-weight:700;color:#000}html body table td,html body table th{border:1px solid #d6d6d6;padding:6px 13px}html body dl{padding:0}html body dl dt{padding:0;margin-top:16px;font-size:1em;font-style:italic;font-weight:700}html body dl dd{padding:0 16px;margin-bottom:16px}html body code{font-family:Menlo,Monaco,Consolas,'Courier New',monospace;font-size:.85em;color:#000;background-color:#f0f0f0;border-radius:3px;padding:.2em 0}html body code::after,html body code::before{letter-spacing:-.2em;content:'\00a0'}html body pre>code{padding:0;margin:0;word-break:normal;white-space:pre;background:0 0;border:0}html body .highlight{margin-bottom:16px}html body .highlight pre,html body pre{padding:1em;overflow:auto;line-height:1.45;border:#d6d6d6;border-radius:3px}html body .highlight pre{margin-bottom:0;word-break:normal}html body pre code,html body pre tt{display:inline;max-width:initial;padding:0;margin:0;overflow:initial;line-height:inherit;word-wrap:normal;background-color:transparent;border:0}html body pre code:after,html body pre code:before,html body pre tt:after,html body pre tt:before{content:normal}html body blockquote,html body dl,html body ol,html body p,html body pre,html body ul{margin-top:0;margin-bottom:16px}html body kbd{color:#000;border:1px solid #d6d6d6;border-bottom:2px solid #c7c7c7;padding:2px 4px;background-color:#f0f0f0;border-radius:3px}@media print{html body{background-color:#fff}html body h1,html body h2,html body h3,html body h4,html body h5,html body h6{color:#000;page-break-after:avoid}html body blockquote{color:#5c5c5c}html body pre{page-break-inside:avoid}html body table{display:table}html body img{display:block;max-width:100%;max-height:100%}html body code,html body pre{word-wrap:break-word;white-space:pre}}.markdown-preview{width:100%;height:100%;box-sizing:border-box}.markdown-preview ul{list-style:disc}.markdown-preview ul ul{list-style:circle}.markdown-preview ul ul ul{list-style:square}.markdown-preview ol{list-style:decimal}.markdown-preview ol ol,.markdown-preview ul ol{list-style-type:lower-roman}.markdown-preview ol ol ol,.markdown-preview ol ul ol,.markdown-preview ul ol ol,.markdown-preview ul ul ol{list-style-type:lower-alpha}.markdown-preview .newpage,.markdown-preview .pagebreak{page-break-before:always}.markdown-preview pre.line-numbers{position:relative;padding-left:3.8em;counter-reset:linenumber}.markdown-preview pre.line-numbers>code{position:relative}.markdown-preview pre.line-numbers .line-numbers-rows{position:absolute;pointer-events:none;top:1em;font-size:100%;left:0;width:3em;letter-spacing:-1px;border-right:1px solid #999;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}.markdown-preview pre.line-numbers .line-numbers-rows>span{pointer-events:none;display:block;counter-increment:linenumber}.markdown-preview pre.line-numbers .line-numbers-rows>span:before{content:counter(linenumber);color:#999;display:block;padding-right:.8em;text-align:right}.markdown-preview .mathjax-exps .MathJax_Display{text-align:center!important}.markdown-preview:not([data-for=preview]) .code-chunk .code-chunk-btn-group{display:none}.markdown-preview:not([data-for=preview]) .code-chunk .status{display:none}.markdown-preview:not([data-for=preview]) .code-chunk .output-div{margin-bottom:16px}.markdown-preview .md-toc{padding:0}.markdown-preview .md-toc .md-toc-link-wrapper .md-toc-link{display:inline;padding:.25rem 0}.markdown-preview .md-toc .md-toc-link-wrapper .md-toc-link div,.markdown-preview .md-toc .md-toc-link-wrapper .md-toc-link p{display:inline}.markdown-preview .md-toc .md-toc-link-wrapper.highlighted .md-toc-link{font-weight:800}.scrollbar-style::-webkit-scrollbar{width:8px}.scrollbar-style::-webkit-scrollbar-track{border-radius:10px;background-color:transparent}.scrollbar-style::-webkit-scrollbar-thumb{border-radius:5px;background-color:rgba(150,150,150,.66);border:4px solid rgba(150,150,150,.66);background-clip:content-box}html body[for=html-export]:not([data-presentation-mode]){position:relative;width:100%;height:100%;top:0;left:0;margin:0;padding:0;overflow:auto}html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{position:relative;top:0;min-height:100vh}@media screen and (min-width:914px){html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{padding:2em calc(50% - 457px + 2em)}}@media screen and (max-width:914px){html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{padding:2em}}@media screen and (max-width:450px){html body[for=html-export]:not([data-presentation-mode]) .markdown-preview{font-size:14px!important;padding:1em}}@media print{html body[for=html-export]:not([data-presentation-mode]) #sidebar-toc-btn{display:none}}html body[for=html-export]:not([data-presentation-mode]) #sidebar-toc-btn{position:fixed;bottom:8px;left:8px;font-size:28px;cursor:pointer;color:inherit;z-index:99;width:32px;text-align:center;opacity:.4}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] #sidebar-toc-btn{opacity:1}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc{position:fixed;top:0;left:0;width:300px;height:100%;padding:32px 0 48px 0;font-size:14px;box-shadow:0 0 4px rgba(150,150,150,.33);box-sizing:border-box;overflow:auto;background-color:inherit}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc::-webkit-scrollbar{width:8px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc::-webkit-scrollbar-track{border-radius:10px;background-color:transparent}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc::-webkit-scrollbar-thumb{border-radius:5px;background-color:rgba(150,150,150,.66);border:4px solid rgba(150,150,150,.66);background-clip:content-box}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc a{text-decoration:none}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc{padding:0 16px}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper .md-toc-link{display:inline;padding:.25rem 0}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper .md-toc-link div,html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper .md-toc-link p{display:inline}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .md-sidebar-toc .md-toc .md-toc-link-wrapper.highlighted .md-toc-link{font-weight:800}html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .markdown-preview{left:300px;width:calc(100% - 300px);padding:2em calc(50% - 457px - 300px / 2);margin:0;box-sizing:border-box}@media screen and (max-width:1274px){html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .markdown-preview{padding:2em}}@media screen and (max-width:450px){html body[for=html-export]:not([data-presentation-mode])[html-show-sidebar-toc] .markdown-preview{width:100%}}html body[for=html-export]:not([data-presentation-mode]):not([html-show-sidebar-toc]) .markdown-preview{left:50%;transform:translateX(-50%)}html body[for=html-export]:not([data-presentation-mode]):not([html-show-sidebar-toc]) .md-sidebar-toc{display:none}
+/* Please visit the URL below for more information: */
+/*   https://shd101wyy.github.io/markdown-preview-enhanced/#/customize-css */
+
+      </style>
+      <!-- The content below will be included at the end of the <head> element. --><script type="text/javascript">
+  document.addEventListener("DOMContentLoaded", function () {
+    // your code here
+  });
+</script></head><body for="html-export">
+    
+    
+      <div class="crossnote markdown-preview  ">
+      
+<h2 id="2024-04-18-update-new-residual-encoder-unet-presets-available"><strong>2024-04-18 UPDATE: New residual encoder UNet presets available!</strong> </h2>
+<h2 id="how-to-run-nnu-net-on-a-new-dataset">How to run nnU-Net on a new dataset </h2>
+<p>Given some dataset, nnU-Net fully automatically configures an entire segmentation pipeline that matches its properties. nnU-Net covers the entire pipeline, from preprocessing to model configuration, model training, postprocessing all the way to ensembling. After running nnU-Net, the trained model(s) can be applied to the test cases for inference.</p>
+<h3 id="dataset-format">Dataset Format </h3>
+<p>nnU-Net expects datasets in a structured format. This format is inspired by the data structure of the <a href="http://medicaldecathlon.com/">Medical Segmentation Decthlon</a>. Please read <a href="dataset_format.md">this</a> for information on how to set up datasets to be compatible with nnU-Net.</p>
+<p><strong>Since version 2 we support multiple image file formats (.nii.gz, .png, .tif, ...)! Read the dataset_format<br>
+documentation to learn more!</strong></p>
+<p><strong>Datasets from nnU-Net v1 can be converted to V2 by running <code>nnUNetv2_convert_old_nnUNet_dataset INPUT_FOLDER  OUTPUT_DATASET_NAME</code>.</strong> Remember that v2 calls datasets DatasetXXX_Name (not Task) where XXX is a 3-digit number.<br>
+Please provide the <strong>path</strong> to the old task, not just the Task name. nnU-Net V2 doesn't know where v1 tasks were!</p>
+<h3 id="experiment-planning-and-preprocessing">Experiment planning and preprocessing </h3>
+<p>Given a new dataset, nnU-Net will extract a dataset fingerprint (a set of dataset-specific properties such as<br>
+image sizes, voxel spacings, intensity information etc). This information is used to design three U-Net configurations.<br>
+Each of these ppielines operates on its own preprocessed version of the dataset.</p>
+<p>The easiest way to run fingerprint extraction, experiment planning and preprocessing is to use:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_plan_and_preprocess <span class="token parameter variable">-d</span> DATASET_ID <span class="token parameter variable">--verify_dataset_integrity</span>
+</code></pre><p>Where <code>DATASET_ID</code> is the dataset id (duh). We recommend <code>--verify_dataset_integrity</code> whenever it's the first time<br>
+you run this command. This will check for some of the most common error sources!</p>
+<p>You can also process several datasets at once by giving <code>-d 1 2 3 [...]</code>. If you already know what U-Net configuration<br>
+you need you can also specify that with <code>-c 3d_fullres</code> (make sure to adapt -np in this case!). For more information<br>
+about all the options available to you please run <code>nnUNetv2_plan_and_preprocess -h</code>.</p>
+<p>nnUNetv2_plan_and_preprocess will create a new subfolder in your nnUNet_preprocessed folder named after the dataset.<br>
+Once the command is completed there will be a dataset_fingerprint.json file as well as a nnUNetPlans.json file for you to look at<br>
+(in case you are interested!). There will also be subfolders containing the preprocessed data for your UNet configurations.</p>
+<p>[Optional]<br>
+If you prefer to keep things separate, you can also use <code>nnUNetv2_extract_fingerprint</code>, <code>nnUNetv2_plan_experiment</code><br>
+and <code>nnUNetv2_preprocess</code> (in that order).</p>
+<h3 id="model-training">Model training </h3>
+<h4 id="overview">Overview </h4>
+<p>You pick which configurations (2d, 3d_fullres, 3d_lowres, 3d_cascade_fullres) should be trained! If you have no idea<br>
+what performs best on your data, just run all of them and let nnU-Net identify the best one. It's up to you!</p>
+<p>nnU-Net trains all configurations in a 5-fold cross-validation over the training cases. This is 1) needed so that<br>
+nnU-Net can estimate the performance of each configuration and tell you which one should be used for your<br>
+segmentation problem and 2) a natural way of obtaining a good model ensemble (average the output of these 5 models<br>
+for prediction) to boost performance.</p>
+<p>You can influence the splits nnU-Net uses for 5-fold cross-validation (see <a href="manual_data_splits.md">here</a>). If you<br>
+prefer to train a single model on all training cases, this is also possible (see below).</p>
+<p><strong>Note that not all U-Net configurations are created for all datasets. In datasets with small image sizes, the U-Net cascade (and with it the 3d_lowres configuration) is omitted because the patch size of the full resolution U-Net already covers a large part of the input images.</strong></p>
+<p>Training models is done with the <code>nnUNetv2_train</code> command. The general structure of the command is:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_train DATASET_NAME_OR_ID UNET_CONFIGURATION FOLD <span class="token punctuation">[</span>additional options, see -h<span class="token punctuation">]</span>
+</code></pre><p>UNET_CONFIGURATION is a string that identifies the requested U-Net configuration (defaults: 2d, 3d_fullres, 3d_lowres, 3d_cascade_lowres). DATASET_NAME_OR_ID specifies what dataset should be trained on and FOLD specifies which fold of the 5-fold-cross-validation is trained.</p>
+<p>nnU-Net stores a checkpoint every 50 epochs. If you need to continue a previous training, just add a <code>--c</code> to the training command.</p>
+<p><strong>IMPORTANT</strong>: If you plan to use <code>nnUNetv2_find_best_configuration</code> (see below) add the <code>--npz</code> flag. This makes nnU-Net save the softmax outputs during the final validation. They are needed for that. Exported softmax predictions are very large and therefore can take up a lot of disk space, which is why this is not enabled by default.</p>
+<p>If you ran initially without the <code>--npz</code> flag but now require the softmax predictions, simply rerun the validation with:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_train DATASET_NAME_OR_ID UNET_CONFIGURATION FOLD <span class="token parameter variable">--val</span> <span class="token parameter variable">--npz</span>
+</code></pre><p>You can specify the device nnU-net should use by using <code>-device DEVICE</code>. DEVICE can only be cpu, cuda or mps. If you have multiple GPUs, please select the gpu id using <code>CUDA_VISIBLE_DEVICES=X nnUNetv2_train [...]</code> (requires device to be cuda).</p>
+<p>See <code>nnUNetv2_train -h</code> for additional options.</p>
+<h3 id="2d-u-net">2D U-Net </h3>
+<p>For FOLD in [0, 1, 2, 3, 4], run:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_train DATASET_NAME_OR_ID 2d FOLD <span class="token punctuation">[</span>--npz<span class="token punctuation">]</span>
+</code></pre><h3 id="3d-full-resolution-u-net">3D full resolution U-Net </h3>
+<p>For FOLD in [0, 1, 2, 3, 4], run:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_train DATASET_NAME_OR_ID 3d_fullres FOLD <span class="token punctuation">[</span>--npz<span class="token punctuation">]</span>
+</code></pre><h3 id="3d-u-net-cascade">3D U-Net cascade </h3>
+<h4 id="3d-low-resolution-u-net">3D low resolution U-Net </h4>
+<p>For FOLD in [0, 1, 2, 3, 4], run:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_train DATASET_NAME_OR_ID 3d_lowres FOLD <span class="token punctuation">[</span>--npz<span class="token punctuation">]</span>
+</code></pre><h4 id="3d-full-resolution-u-net-1">3D full resolution U-Net </h4>
+<p>For FOLD in [0, 1, 2, 3, 4], run:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_train DATASET_NAME_OR_ID 3d_cascade_fullres FOLD <span class="token punctuation">[</span>--npz<span class="token punctuation">]</span>
+</code></pre><p><strong>Note that the 3D full resolution U-Net of the cascade requires the five folds of the low resolution U-Net to be completed!</strong></p>
+<p>The trained models will be written to the nnUNet_results folder. Each training obtains an automatically generated output folder name:</p>
+<p>nnUNet_results/DatasetXXX_MYNAME/TRAINER_CLASS_NAME__PLANS_NAME__CONFIGURATION/FOLD</p>
+<p>For Dataset002_Heart (from the MSD), for example, this looks like this:</p>
+<pre class="language-text">nnUNet_results/
+├── Dataset002_Heart
+    │── nnUNetTrainer__nnUNetPlans__2d
+    │    ├── fold_0
+    │    ├── fold_1
+    │    ├── fold_2
+    │    ├── fold_3
+    │    ├── fold_4
+    │    ├── dataset.json
+    │    ├── dataset_fingerprint.json
+    │    └── plans.json
+    └── nnUNetTrainer__nnUNetPlans__3d_fullres
+         ├── fold_0
+         ├── fold_1
+         ├── fold_2
+         ├── fold_3
+         ├── fold_4
+         ├── dataset.json
+         ├── dataset_fingerprint.json
+         └── plans.json
+</pre>
+<p>Note that 3d_lowres and 3d_cascade_fullres do not exist here because this dataset did not trigger the cascade. In each model training output folder (each of the fold_x folder), the following files will be created:</p>
+<ul>
+<li>debug.json: Contains a summary of blueprint and inferred parameters used for training this model as well as a bunch of additional stuff. Not easy to read, but very useful for debugging 😉</li>
+<li>checkpoint_best.pth: checkpoint files of the best model identified during training. Not used right now unless you explicitly tell nnU-Net to use it.</li>
+<li>checkpoint_final.pth: checkpoint file of the final model (after training has ended). This is what is used for both validation and inference.</li>
+<li>network_architecture.pdf (only if hiddenlayer is installed!): a pdf document with a figure of the network architecture in it.</li>
+<li>progress.png: Shows losses, pseudo dice, learning rate and epoch times ofer the course of the training. At the top is a plot of the training (blue) and validation (red) loss during training. Also shows an approximation of  the dice (green) as well as a moving average of it (dotted green line). This approximation is the average Dice score of the foreground classes. <strong>It needs to be taken with a big (!) grain of salt</strong> because it is computed on randomly drawn patches from the validationdata at the end of each epoch, and the aggregation of TP, FP and FN for the Dice computation treats the patches as if they all originate from the same volume ('global Dice'; we do not compute a Dice for each validation case and then average over all cases but pretend that there is only one validation case from which we sample patches). The reason for this is that the 'global Dice' is easy to compute during training and is still quite useful to evaluate whether a model is training at all or not. A proper validation takes way too long to be done each epoch. It is run at the end of the training.</li>
+<li>validation: in this folder are the predicted validation cases after the training has finished. The summary.json file in here contains the validation metrics (a mean over all cases is provided at the start of the file). If <code>--npz</code> was set then the compressed softmax outputs (saved as .npz files) are in here as well.</li>
+</ul>
+<p>During training it is often useful to watch the progress. We therefore recommend that you have a look at the generated progress.png when running the first training. It will be updated after each epoch.</p>
+<p>Training times largely depend on the GPU. The smallest GPU we recommend for training is the Nvidia RTX 2080ti. With  that all network trainings take less than 2 days. Refer to our <a href="benchmarking.md">benchmarks</a> to see if your system is<br>
+performing as expected.</p>
+<h3 id="automatically-determine-the-best-configuration">Automatically determine the best configuration </h3>
+<p>Once the desired configurations were trained (full cross-validation) you can tell nnU-Net to automatically identify the best combination for you:</p>
+<pre data-role="codeBlock" data-info="commandline" class="language-commandline commandline"><code>nnUNetv2_find_best_configuration DATASET_NAME_OR_ID -c CONFIGURATIONS 
+</code></pre><p><code>CONFIGURATIONS</code> hereby is the list of configurations you would like to explore. Per default, ensembling is enabled meaning that nnU-Net will generate all possible combinations of ensembles (2 configurations per ensemble). This requires the .npz files containing the predicted probabilities of the validation set to be present (use <code>nnUNetv2_train</code> with <code>--npz</code> flag, see above). You can disable ensembling by setting the <code>--disable_ensembling</code> flag.</p>
+<p>See <code>nnUNetv2_find_best_configuration -h</code> for more options.</p>
+<p>nnUNetv2_find_best_configuration will also automatically determine the postprocessing that should be used. Postprocessing in nnU-Net only considers the removal of all but the largest component in the prediction (once for<br>
+foreground vs background and once for each label/region).</p>
+<p>Once completed, the command will print to your console exactly what commands you need to run to make predictions. It will also create two files in the <code>nnUNet_results/DATASET_NAME</code> folder for you to inspect:</p>
+<ul>
+<li><code>inference_instructions.txt</code> again contains the exact commands you need to use for predictions</li>
+<li><code>inference_information.json</code> can be inspected to see the performance of all configurations and ensembles, as well as the effect of the postprocessing plus some debug information.</li>
+</ul>
+<h3 id="run-inference">Run inference </h3>
+<p>Remember that the data located in the input folder must have the file endings as the dataset you trained the model on and must adhere to the nnU-Net naming scheme for image files (see <a href="dataset_format.md">dataset format</a> and <a href="dataset_format_inference.md">inference data format</a>!)</p>
+<p><code>nnUNetv2_find_best_configuration</code> (see above) will print a string to the terminal with the inference commands you need to use. The easiest way to run inference is to simply use these commands.</p>
+<p>If you wish to manually specify the configuration(s) used for inference, use the following commands:</p>
+<h4 id="run-prediction">Run prediction </h4>
+<p>For each of the desired configurations, run:</p>
+<pre data-role="codeBlock" data-info="" class="language-text"><code>nnUNetv2_predict -i INPUT_FOLDER -o OUTPUT_FOLDER -d DATASET_NAME_OR_ID -c CONFIGURATION --save_probabilities
+</code></pre><p>Only specify <code>--save_probabilities</code> if you intend to use ensembling. <code>--save_probabilities</code> will make the command save the predicted probabilities alongside of the predicted segmentation masks requiring a lot of disk space.</p>
+<p>Please select a separate <code>OUTPUT_FOLDER</code> for each configuration!</p>
+<p>Note that per default, inference will be done with all 5 folds from the cross-validation as an ensemble. We very strongly recommend you use all 5 folds. Thus, all 5 folds must have been trained prior to running inference.</p>
+<p>If you wish to make predictions with a single model, train the <code>all</code> fold and specify it in <code>nnUNetv2_predict</code> with <code>-f all</code></p>
+<h4 id="ensembling-multiple-configurations">Ensembling multiple configurations </h4>
+<p>If you wish to ensemble multiple predictions (typically form different configurations), you can do so with the following command:</p>
+<pre data-role="codeBlock" data-info="bash" class="language-bash bash"><code>nnUNetv2_ensemble <span class="token parameter variable">-i</span> FOLDER1 FOLDER2 <span class="token punctuation">..</span>. <span class="token parameter variable">-o</span> OUTPUT_FOLDER <span class="token parameter variable">-np</span> NUM_PROCESSES
+</code></pre><p>You can specify an arbitrary number of folders, but remember that each folder needs to contain npz files that were generated by <code>nnUNetv2_predict</code>. Again, <code>nnUNetv2_ensemble -h</code> will tell you more about additional options.</p>
+<h4 id="apply-postprocessing">Apply postprocessing </h4>
+<p>Finally, apply the previously determined postprocessing to the (ensembled) predictions:</p>
+<pre data-role="codeBlock" data-info="commandline" class="language-commandline commandline"><code>nnUNetv2_apply_postprocessing -i FOLDER_WITH_PREDICTIONS -o OUTPUT_FOLDER --pp_pkl_file POSTPROCESSING_FILE -plans_json PLANS_FILE -dataset_json DATASET_JSON_FILE
+</code></pre><p><code>nnUNetv2_find_best_configuration</code> (or its generated <code>inference_instructions.txt</code> file) will tell you where to find the postprocessing file. If not you can just look for it in your results folder (it's creatively named <code>postprocessing.pkl</code>). If your source folder is from an ensemble, you also need to specify a <code>-plans_json</code> file and a <code>-dataset_json</code> file that should be used (for single configuration predictions these are automatically copied from the respective training). You can pick these files from any of the ensemble members.</p>
+
+      </div>
+      
+      
+    
+    
+    
+    
+    
+    
+  
+    </body></html>
