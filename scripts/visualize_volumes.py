@@ -36,6 +36,11 @@ from pathlib import Path
 from threading import Timer
 from typing import Iterable, List, Mapping
 
+# Bootstrap Python path FIRST before any local imports
+_repo_root = Path(__file__).resolve().parents[1]
+if str(_repo_root) not in sys.path:
+    sys.path.insert(0, str(_repo_root))
+
 import imageio
 import matplotlib
 
@@ -63,13 +68,6 @@ LABEL_COLORS = {
 # ============================================================================
 # Shared Utilities
 # ============================================================================
-
-def bootstrap_pythonpath() -> None:
-    """Ensure the repository root is on the Python path."""
-    repo_root = Path(__file__).resolve().parents[2]
-    if str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-
 
 def list_case_dirs(root: Path) -> List[Path]:
     """List all case directories within a dataset root."""
@@ -131,7 +129,6 @@ def build_colormap() -> ListedColormap:
 
 def run_interactive_mode(args: argparse.Namespace) -> None:
     """Launch the interactive Dash volume inspector."""
-    bootstrap_pythonpath()
     from apps.volume_inspector import create_dash_app
 
     data_roots = args.data_root if args.data_root else None
@@ -156,7 +153,6 @@ def run_interactive_mode(args: argparse.Namespace) -> None:
 
 def run_static_mode(args: argparse.Namespace) -> None:
     """Generate a static PNG visualization."""
-    bootstrap_pythonpath()
     from apps.common.volume_utils import (
         AXIS_TO_INDEX,
         MODALITY_LABELS,
@@ -217,7 +213,6 @@ def create_modalities_panel(
     volume_utils_prepare_slice,
 ) -> plt.Figure:
     """Create a panel showing all modalities for a single slice."""
-    bootstrap_pythonpath()
     from apps.common.volume_utils import MODALITY_LABELS, build_segmentation_colormap, segmentation_legend_handles
 
     cmap_seg, norm_seg = build_segmentation_colormap()
@@ -254,7 +249,6 @@ def create_orthogonal_panel(
     volume_utils_prepare_slice,
 ) -> plt.Figure:
     """Create a panel showing orthogonal views of a single modality."""
-    bootstrap_pythonpath()
     from apps.common.volume_utils import MODALITY_LABELS, build_segmentation_colormap, segmentation_legend_handles
 
     cmap_seg, norm_seg = build_segmentation_colormap()
