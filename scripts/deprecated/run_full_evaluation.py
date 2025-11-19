@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Iterable, Mapping, MutableMapping, Sequence
 
 try:  # pragma: no cover - allow import when used as module
-	from compute_brats_lesion_metrics import (
+	from scripts.deprecated.compute_brats_lesion_metrics import (
 		build_label_groups,
 		case_id_from_filename,
 		collect_cases,
